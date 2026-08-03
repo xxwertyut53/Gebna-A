@@ -78,7 +78,7 @@ type IconName =
   | "user"
   | "users";
 
-const LOGO = "https://media.base44.com/images/public/6a3067563c27b191946c5e4f/3e74a3750_Gebna_A_Logo-03.jpg";
+const LOGO = "/icons/icon-192.png";
 const HERO_IMAGE = "https://media.base44.com/images/public/6a3067563c27b191946c5e4f/2411144be_WhatsApp_Image_2026-06-22_at_41829_AM.jpeg";
 
 const products: Product[] = [
@@ -216,6 +216,7 @@ function InstallPrompt() {
   const [visible, setVisible] = useState(false);
   const [promptEvent, setPromptEvent] = useState<Event & { prompt?: () => Promise<void> } | null>(null);
   useEffect(() => {
+    if (window.matchMedia?.("(display-mode: standalone)")?.matches) return;
     const dismissed = window.localStorage.getItem("gebna-install-dismissed");
     const handler = (event: Event) => { event.preventDefault(); setPromptEvent(event as Event & { prompt?: () => Promise<void> }); setVisible(!dismissed); };
     window.addEventListener("beforeinstallprompt", handler);
@@ -878,6 +879,8 @@ function ProductFormModal({ product, onClose, onSaved }: { product: AdminProduct
   const [nameTr, setNameTr] = useState(product?.nameTr || "");
   const [nameAr, setNameAr] = useState(product?.nameAr || "");
   const [descEn, setDescEn] = useState(product?.descriptionEn || "");
+  const [descTr, setDescTr] = useState(product?.descriptionTr || "");
+  const [descAr, setDescAr] = useState(product?.descriptionAr || "");
   const [price300, setPrice300] = useState(product?.price300g || "");
   const [price600, setPrice600] = useState(product?.price600g || "");
   const [priceSingle, setPriceSingle] = useState(product?.priceSingle || "");
@@ -893,12 +896,13 @@ function ProductFormModal({ product, onClose, onSaved }: { product: AdminProduct
   const submit = async () => {
     setError("");
     if (!nameEn.trim() || !nameTr.trim() || !nameAr.trim()) { setError("All three names are required."); return; }
+    if (!descEn.trim() && !descTr.trim() && !descAr.trim()) { setError("Add at least one description (English, Turkish, or Arabic)."); return; }
     if (isSandwich && !priceSingle) { setError("Enter a price for the sandwich."); return; }
     if (!isSandwich && (!price300 || !price600)) { setError("Both 300g and 600g prices are required."); return; }
     const currentAll = isSandwich ? imagesSingle : [...images600, ...images300];
     if (!currentAll.length) { setError("Add at least one image."); return; }
     setSaving(true);
-    const payload: Record<string, unknown> = { productType: pType, nameEn: nameEn.trim(), nameTr: nameTr.trim(), nameAr: nameAr.trim(), descriptionEn: descEn.trim(), descriptionTr: descEn.trim(), descriptionAr: descEn.trim(), mainImage: mainImage || currentAll[0], featured, active };
+    const payload: Record<string, unknown> = { productType: pType, nameEn: nameEn.trim(), nameTr: nameTr.trim(), nameAr: nameAr.trim(), descriptionEn: descEn.trim(), descriptionTr: descTr.trim(), descriptionAr: descAr.trim(), mainImage: mainImage || currentAll[0], featured, active };
     if (isSandwich) { payload.priceSingle = priceSingle; payload.price300g = "0"; payload.price600g = "0"; payload.images = imagesSingle; payload.images300g = []; payload.images600g = []; }
     else { payload.price300g = price300; payload.price600g = price600; payload.priceSingle = null; payload.images300g = images300; payload.images600g = images600; payload.images = []; }
     const url = isEdit ? `/api/admin/products/${product!.id}` : "/api/admin/products";
@@ -913,7 +917,11 @@ function ProductFormModal({ product, onClose, onSaved }: { product: AdminProduct
     <div className="modal-form">
       <div className="product-type-switch"><button className={pType === "cheese" ? "active" : ""} onClick={() => setPType("cheese")}>🧀 Cheese</button><button className={pType === "sandwich" ? "active" : ""} onClick={() => setPType("sandwich")}>🥪 Sandwich</button></div>
       <div className="form-grid form-grid-3"><Field label="Name (English)" name="nameEn" placeholder={isSandwich ? "Classic Sandwich" : "Classic"} value={nameEn} onChange={setNameEn} required /><Field label="Name (Turkish)" name="nameTr" placeholder={isSandwich ? "Klasik Sandviç" : "Klasik"} value={nameTr} onChange={setNameTr} required /><Field label="Name (Arabic)" name="nameAr" placeholder={isSandwich ? "ساندوتش كلاسيك" : "سادة"} value={nameAr} onChange={setNameAr} required /></div>
-      <Field label="Description (English)" name="descEn" placeholder="Describe this variety" value={descEn} onChange={setDescEn} textarea />
+      <div className="form-grid form-grid-3">
+        <Field label="Description (English)" name="descEn" placeholder="Describe this variety" value={descEn} onChange={setDescEn} textarea />
+        <Field label="Description (Turkish)" name="descTr" placeholder="Bu çeşidi açıklayın" value={descTr} onChange={setDescTr} textarea />
+        <Field label="Description (Arabic)" name="descAr" placeholder="صف هذا المنتج" value={descAr} onChange={setDescAr} textarea />
+      </div>
       {isSandwich ? <Field label="Price (₺)" name="priceSingle" placeholder="85" value={priceSingle} onChange={setPriceSingle} required /> : <div className="form-grid form-grid-2"><Field label="Price 300g (₺)" name="price300" placeholder="139" value={price300} onChange={setPrice300} required /><Field label="Price 600g (₺)" name="price600" placeholder="239" value={price600} onChange={setPrice600} required /></div>}
       {isSandwich ? <ImageGalleryEditor title="🖼️ Sandwich photos" images={imagesSingle} setImages={setImagesSingle} mainImage={mainImage} setMainImage={setMainImage} /> : <><ImageGalleryEditor title="🖼️ Photos — 600g size" images={images600} setImages={setImages600} mainImage={mainImage} setMainImage={setMainImage} /><ImageGalleryEditor title="🖼️ Photos — 300g size" images={images300} setImages={setImages300} mainImage={mainImage} setMainImage={setMainImage} /></>}
       <div className="main-image-preview">{mainImage ? <><img src={mainImage} alt="" /><span>This is the <b>main photo</b> shown on the home page.</span></> : <span className="gallery-empty">Tap ★ on any photo to choose the main home-page image.</span>}</div>
@@ -1010,6 +1018,7 @@ function DownloadPage({ go }: { go: (path: string) => void }) {
   const [installed, setInstalled] = useState(false);
   const [busy, setBusy] = useState(false);
   useEffect(() => {
+    if (window.matchMedia?.("(display-mode: standalone)")?.matches) { go("/home"); return; }
     const onPrompt = (event: Event) => { event.preventDefault(); setDeferred(event as BeforeInstallPromptEvent); };
     const onInstalled = () => { setInstalled(true); setDeferred(null); };
     window.addEventListener("beforeinstallprompt", onPrompt);

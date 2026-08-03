@@ -2,6 +2,7 @@ import { eq } from "drizzle-orm";
 import { db } from "@/db";
 import { productImages, products } from "@/db/schema";
 import { requireAdmin } from "@/lib/auth";
+import { autofillTrilingualText } from "@/lib/translation";
 
 export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const admin = await requireAdmin();
@@ -13,6 +14,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
   const updates: Record<string, unknown> = {};
   const allowed = ["categoryId", "nameEn", "nameTr", "nameAr", "descriptionEn", "descriptionTr", "descriptionAr", "price300g", "price600g", "priceSingle", "productType", "stockStatus", "featured", "active", "mainImage", "tags"];
   for (const key of allowed) if (key in (body || {})) updates[key] = body?.[key];
+  for (const key of ["nameEn", "nameTr", "nameAr", "descriptionEn", "descriptionTr", "descriptionAr"]) if (key in updates) updates[key] = String(updates[key] ?? "");
   for (const key of ["price300g", "price600g", "priceSingle"]) if (key in updates) updates[key] = updates[key] != null ? String(updates[key]) : null;
   if (Array.isArray(body?.images300g)) { updates.images300g = body.images300g; updates.image300g = body.images300g[0] || null; }
   if (Array.isArray(body?.images600g)) { updates.images600g = body.images600g; updates.image600g = body.images600g[0] || null; }
@@ -25,6 +27,23 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
   const requestedMain = typeof updates.mainImage === "string" ? updates.mainImage : typeof body?.mainImage === "string" ? body.mainImage : existing.mainImage || "";
   if (allImages.length) { updates.mainImage = requestedMain && allImages.includes(requestedMain) ? requestedMain : allImages[0]; }
   else if (!requestedMain) { updates.mainImage = null; }
+
+  const descTouched = ("descriptionEn" in updates) || ("descriptionTr" in updates) || ("descriptionAr" in updates);
+  if (descTouched) {
+    const rawDescEn = typeof updates.descriptionEn === "string" ? updates.descriptionEn : existing.descriptionEn || "";
+    const rawDescTr = typeof updates.descriptionTr === "string" ? updates.descriptionTr : existing.descriptionTr || "";
+    const rawDescAr = typeof updates.descriptionAr === "string" ? updates.descriptionAr : existing.descriptionAr || "";
+    if (!rawDescEn.trim() && !rawDescTr.trim() && !rawDescAr.trim()) return Response.json({ error: "At least one description is required (EN/TR/AR)." }, { status: 400 });
+    const descriptions = await autofillTrilingualText({ en: rawDescEn, tr: rawDescTr, ar: rawDescAr }).catch((e: unknown) => {
+      const message = e instanceof Error ? e.message : "Translation failed.";
+      return { error: message } as const;
+    });
+    if ("error" in descriptions) return Response.json({ error: `Auto-translation failed: ${descriptions.error}` }, { status: 502 });
+    updates.descriptionEn = descriptions.en;
+    updates.descriptionTr = descriptions.tr;
+    updates.descriptionAr = descriptions.ar;
+  }
+
   updates.updatedAt = new Date();
   const [product] = await db.update(products).set(updates).where(eq(products.id, id)).returning();
   if (!product) return Response.json({ error: "Product not found." }, { status: 404 });
