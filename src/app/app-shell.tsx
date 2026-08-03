@@ -78,7 +78,7 @@ type IconName =
   | "user"
   | "users";
 
-const LOGO = "/icons/icon-192.png";
+const LOGO = "/logo.png";
 const HERO_IMAGE = "https://media.base44.com/images/public/6a3067563c27b191946c5e4f/2411144be_WhatsApp_Image_2026-06-22_at_41829_AM.jpeg";
 
 const products: Product[] = [

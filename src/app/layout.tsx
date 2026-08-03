@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import type { ReactNode } from "react";
 import "./globals.css";
 
-const LOGO = "/icons/icon-512.png";
+const LOGO = "/logo.png";
 const SITE_URL = "https://gebna-a.app";
 
 export const metadata: Metadata = {
