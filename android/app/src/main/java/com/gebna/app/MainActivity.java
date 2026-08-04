@@ -44,7 +44,7 @@ public class MainActivity extends AppCompatActivity {
         webView.getSettings().setUserAgentString(userAgent + " GebnaA-Android/1.0");
 
         // Load your website
-        webView.loadUrl("https://gebna-a.app");
+        webView.loadUrl("https://gebna-a.onrender.com/");
     }
 
     @Override
