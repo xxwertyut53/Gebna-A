@@ -164,7 +164,7 @@ export const reviews = pgTable("reviews", {
   customerName: text("customer_name").notNull(),
   rating: numeric("rating", { precision: 2, scale: 1 }).notNull(),
   comment: text("comment").notNull(),
-  approved: boolean("approved").default(false).notNull(),
+  approved: boolean("approved").default(true).notNull(),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
 });

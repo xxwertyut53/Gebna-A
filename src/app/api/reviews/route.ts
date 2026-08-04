@@ -43,7 +43,7 @@ export async function POST(request: NextRequest) {
       customerName,
       rating,
       comment,
-      approved: false, // Reviews require admin approval
+      approved: true, // Auto-approve reviews
     }).returning();
 
     return NextResponse.json(newReview[0], { status: 201 });
