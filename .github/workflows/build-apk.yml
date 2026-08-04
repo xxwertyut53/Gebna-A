@@ -30,6 +30,11 @@ jobs:
           cd android
           ./gradlew assembleRelease
 
+      - name: List build outputs
+        run: |
+          find android/app/build/outputs -name "*.apk" 2>/dev/null || echo "No APK found in standard location"
+          ls -la android/app/build/outputs/ 2>/dev/null || echo "Outputs directory not found"
+
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
