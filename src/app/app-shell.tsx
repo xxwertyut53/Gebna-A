@@ -400,12 +400,19 @@ function ProductDetailPage({ product, go, addToCart, cartCount }: { product: Pro
   const [error, setError] = useState("");
   const [added, setAdded] = useState(false);
   const [loadedFlavors, setLoadedFlavors] = useState<string[]>(["Spicy 🌶", "Cool ❄️", "Herb 🌿", "Smoked 🔥", "Classic"]);
+  const [reviews, setReviews] = useState<Array<{ id: string; customerName: string; rating: number; comment: string; createdAt: string }>>([]);
+  const [reviewForm, setReviewForm] = useState({ customerName: "", rating: 5, comment: "" });
+  const [reviewSubmitted, setReviewSubmitted] = useState(false);
+  const [reviewError, setReviewError] = useState("");
   useEffect(() => {
     try {
       const savedFlavors = window.localStorage.getItem("gebna-flavors-list");
       if (savedFlavors) setLoadedFlavors(JSON.parse(savedFlavors));
     } catch { /* fallback to defaults */ }
   }, []);
+  useEffect(() => {
+    fetch(`/api/reviews?productId=${product.id}`).then((r) => r.ok ? r.json() : []).then((data) => setReviews(data)).catch(() => undefined);
+  }, [product.id]);
   const { scrollY } = useScroll();
   const imageY = useTransform(scrollY, [0, 600], [0, 58]);
   const gallery = isSandwich ? (product.images?.length ? product.images : [product.image]) : size === "300g" ? (product.images300g?.length ? product.images300g : [product.image]) : (product.images600g?.length ? product.images600g : [product.image]);
@@ -418,7 +425,28 @@ function ProductDetailPage({ product, go, addToCart, cartCount }: { product: Pro
   const swipeEnd = (e: React.TouchEvent) => { const diff = e.changedTouches[0].clientX - touchStart.current; if (diff < -40 && galleryIndex < gallery.length - 1) setGalleryIndex((i) => i + 1); else if (diff > 40 && galleryIndex > 0) setGalleryIndex((i) => i - 1); else setAutoSwipe(true); };
   const toggleFlavor = (f: string) => setSelectedFlavors((prev) => prev.includes(f) ? prev.filter((x) => x !== f) : [...prev, f]);
   const handleAdd = () => { if (isSandwich && selectedFlavors.length === 0) { setError(lang === "ar" ? "اختر نكهة واحدة على الأقل" : lang === "tr" ? "En az bir lezzet seçin" : "Choose at least one flavor"); return; } if (!isSandwich && !flavor) { setError(lang === "ar" ? "اختر النكهة" : lang === "tr" ? "Lezzet seçin" : "Choose your flavor"); return; } setError(""); addToCart(product, isSandwich ? "single" : size, isSandwich ? selectedFlavors.join(",") : flavor); setAdded(true); window.setTimeout(() => setAdded(false), 1300); };
-  return <div className="store-page"><StoreHeader go={go} cartCount={cartCount} /><main className="detail-main"><button className="back-link" onClick={() => go("/home")}><Icon name="arrow" size={16} /> {t("back")}</button><div className="detail-layout"><div className="detail-image-wrap" ref={touchRef} onTouchStart={swipeStart} onTouchEnd={swipeEnd}><motion.img src={selectedImage} alt={display.name} style={{ y: imageY }} /><span className="detail-stamp"><img src={LOGO} alt="Gebna-A" /></span>{gallery.length > 1 && <div className="detail-dots">{gallery.map((image, index) => { const distance = Math.min(2, Math.abs(index - galleryIndex)); return <button key={`${image}-${index}`} className={`detail-dot dist-${distance} ${index === galleryIndex ? "is-active" : ""}`} aria-label={`View photo ${index + 1}`} onClick={() => { setGalleryIndex(index); setAutoSwipe(false); }} />; })}</div>}</div><div className="detail-copy"><span className="eyebrow">{product.category.toUpperCase()} {isSandwich ? "SANDWICH" : "CHEESE"}</span><h1>{display.name}</h1><div className="detail-rating">★★★★★ <span>Handcrafted with care</span></div><p className="detail-description">{display.description} {lang === "ar" ? "محضّرة بمكونات مختارة بعناية وروح المطبخ المصري." : "Prepared with carefully selected ingredients and the spirit of an Egyptian kitchen."}</p>{!isSandwich && <><div className="option-label"><span>{t("size")}</span><span className="option-hint">{lang === "ar" ? "اختر الحجم" : "Select one"}</span></div><div className="size-options">{(["300g", "600g"] as const).map((item) => <button key={item} className={size === item ? "selected" : ""} onClick={() => { setSize(item); setGalleryIndex(0); }}><span>{item}</span><b>₺{item === "300g" ? product.price300 : product.price600}</b></button>)}</div></>}{isSandwich && <><div className="option-label"><span>{t("flavors")}</span><span className="option-hint">{t("flavorsNote")}</span></div><div className="sandwich-flavors">{loadedFlavors.map((f) => <button key={f} className={`sandwich-flavor-chip ${selectedFlavors.includes(f) ? "selected" : ""}`} onClick={() => toggleFlavor(f)}>{f}{selectedFlavors.includes(f) && " ✓"}</button>)}</div></>}{!isSandwich && <><div className="option-label flavor-label"><span>{t("flavor")}</span><span className="option-hint">{t("required")}</span></div><div className="flavor-options"><button className={flavor === "cool" ? "selected cool" : ""} onClick={() => { setFlavor("cool"); setError(""); }}>{t("cool")}</button><button className={flavor === "spicy" ? "selected spicy" : ""} onClick={() => { setFlavor("spicy"); setError(""); }}>{t("spicy")}</button></div></>}{error && <p className="form-error">{error}</p>}<div className="detail-actions"><span className="big-price">₺{currentPrice}</span><Button onClick={handleAdd}>{added ? "✓ Added to cart" : <><Icon name="bag" size={17} /> {t("add")}</>}</Button></div><div className="detail-note"><img src={LOGO} alt="Gebna-A" /><p>{lang === "ar" ? "تعبأ طازجة لك. الطلبات متاحة السبت والأحد." : "Freshly packed for you. Orders are accepted every Saturday and Sunday."}</p></div></div></div></main></div>;
+  const handleReviewSubmit = async (event: React.FormEvent) => {
+    event.preventDefault();
+    if (!reviewForm.customerName.trim() || !reviewForm.comment.trim()) {
+      setReviewError(lang === "ar" ? "الرجاء ملء جميع الحقول" : lang === "tr" ? "Lütfen tüm alanları doldurun" : "Please fill all fields");
+      return;
+    }
+    const response = await fetch("/api/reviews", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ ...reviewForm, productId: product.id }),
+    });
+    const data = await response.json();
+    if (!response.ok) {
+      setReviewError(data.error || "Failed to submit review");
+      return;
+    }
+    setReviewSubmitted(true);
+    setReviewForm({ customerName: "", rating: 5, comment: "" });
+    window.setTimeout(() => setReviewSubmitted(false), 3000);
+    fetch(`/api/reviews?productId=${product.id}`).then((r) => r.ok ? r.json() : []).then((data) => setReviews(data)).catch(() => undefined);
+  };
+  return <div className="store-page"><StoreHeader go={go} cartCount={cartCount} /><main className="detail-main"><button className="back-link" onClick={() => go("/home")}><Icon name="arrow" size={16} /> {t("back")}</button><div className="detail-layout"><div className="detail-image-wrap" ref={touchRef} onTouchStart={swipeStart} onTouchEnd={swipeEnd}><motion.img src={selectedImage} alt={display.name} style={{ y: imageY }} /><span className="detail-stamp"><img src={LOGO} alt="Gebna-A" /></span>{gallery.length > 1 && <div className="detail-dots">{gallery.map((image, index) => { const distance = Math.min(2, Math.abs(index - galleryIndex)); return <button key={`${image}-${index}`} className={`detail-dot dist-${distance} ${index === galleryIndex ? "is-active" : ""}`} aria-label={`View photo ${index + 1}`} onClick={() => { setGalleryIndex(index); setAutoSwipe(false); }} />; })}</div>}</div><div className="detail-copy"><span className="eyebrow">{product.category.toUpperCase()} {isSandwich ? "SANDWICH" : "CHEESE"}</span><h1>{display.name}</h1><div className="detail-rating">★★★★★ <span>Handcrafted with care</span></div><p className="detail-description">{display.description} {lang === "ar" ? "محضّرة بمكونات مختارة بعناية وروح المطبخ المصري." : "Prepared with carefully selected ingredients and the spirit of an Egyptian kitchen."}</p>{!isSandwich && <><div className="option-label"><span>{t("size")}</span><span className="option-hint">{lang === "ar" ? "اختر الحجم" : "Select one"}</span></div><div className="size-options">{(["300g", "600g"] as const).map((item) => <button key={item} className={size === item ? "selected" : ""} onClick={() => { setSize(item); setGalleryIndex(0); }}><span>{item}</span><b>₺{item === "300g" ? product.price300 : product.price600}</b></button>)}</div></>}{isSandwich && <><div className="option-label"><span>{t("flavors")}</span><span className="option-hint">{t("flavorsNote")}</span></div><div className="flavor-grid">{loadedFlavors.map((f) => <button key={f} className={`flavor-chip ${selectedFlavors.includes(f) ? "selected" : ""}`} onClick={() => toggleFlavor(f)}>{f}</button>)}</div></>}{!isSandwich && <><div className="option-label flavor-label"><span>{t("flavor")}</span><span className="option-hint">{t("required")}</span></div><div className="flavor-options"><button className={flavor === "cool" ? "selected cool" : ""} onClick={() => { setFlavor("cool"); setError(""); }}>{t("cool")}</button><button className={flavor === "spicy" ? "selected spicy" : ""} onClick={() => { setFlavor("spicy"); setError(""); }}>{t("spicy")}</button></div></>}{error && <p className="form-error">{error}</p>}<div className="detail-actions"><span className="big-price">₺{currentPrice}</span><Button onClick={handleAdd}>{added ? "✓ Added to cart" : <><Icon name="bag" size={17} /> {t("add")}</>}</Button></div><div className="detail-note"><img src={LOGO} alt="Gebna-A" /><p>{lang === "ar" ? "تعبأ طازجة لك. الطلبات متاحة السبت والأحد." : "Freshly packed for you. Orders are accepted every Saturday and Sunday."}</p></div></div></div></main></div>;
 }
 
 function CartPage({ cart, go, updateQuantity, removeItem, updateFlavor }: { cart: CartItem[]; go: (path: string) => void; updateQuantity: (key: string, amount: number) => void; removeItem: (key: string) => void; updateFlavor: (key: string, flavor: FlavorChoice) => void }) {

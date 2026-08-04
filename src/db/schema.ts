@@ -157,14 +157,27 @@ export const appSettings = pgTable("app_settings", {
   updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
 });
 
+export const reviews = pgTable("reviews", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  productId: uuid("product_id").notNull().references(() => products.id, { onDelete: "cascade" }),
+  userId: uuid("user_id").references(() => users.id, { onDelete: "set null" }),
+  customerName: text("customer_name").notNull(),
+  rating: numeric("rating", { precision: 2, scale: 1 }).notNull(),
+  comment: text("comment").notNull(),
+  approved: boolean("approved").default(false).notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+});
+
 export const categoriesRelations = relations(categories, ({ many }) => ({ products: many(products) }));
-export const productsRelations = relations(products, ({ one, many }) => ({ category: one(categories, { fields: [products.categoryId], references: [categories.id] }), images: many(productImages), orderItems: many(orderItems) }));
+export const productsRelations = relations(products, ({ one, many }) => ({ category: one(categories, { fields: [products.categoryId], references: [categories.id] }), images: many(productImages), orderItems: many(orderItems), reviews: many(reviews) }));
 export const productImagesRelations = relations(productImages, ({ one }) => ({ product: one(products, { fields: [productImages.productId], references: [products.id] }) }));
-export const usersRelations = relations(users, ({ many }) => ({ sessions: many(sessions), orders: many(orders), savedAddresses: many(savedAddresses) }));
+export const usersRelations = relations(users, ({ many }) => ({ sessions: many(sessions), orders: many(orders), savedAddresses: many(savedAddresses), reviews: many(reviews) }));
 export const sessionsRelations = relations(sessions, ({ one }) => ({ user: one(users, { fields: [sessions.userId], references: [users.id] }) }));
 export const ordersRelations = relations(orders, ({ one, many }) => ({ user: one(users, { fields: [orders.userId], references: [users.id] }), items: many(orderItems) }));
 export const orderItemsRelations = relations(orderItems, ({ one }) => ({ order: one(orders, { fields: [orderItems.orderId], references: [orders.id] }), product: one(products, { fields: [orderItems.productId], references: [products.id] }) }));
 export const savedAddressesRelations = relations(savedAddresses, ({ one }) => ({ user: one(users, { fields: [savedAddresses.userId], references: [users.id] }) }));
+export const reviewsRelations = relations(reviews, ({ one }) => ({ product: one(products, { fields: [reviews.productId], references: [products.id] }), user: one(users, { fields: [reviews.userId], references: [users.id] }) }));
 
 export type User = typeof users.$inferSelect;
 export type Product = typeof products.$inferSelect;
