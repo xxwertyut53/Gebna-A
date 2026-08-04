@@ -216,7 +216,9 @@ function InstallPrompt() {
   const [visible, setVisible] = useState(false);
   const [promptEvent, setPromptEvent] = useState<Event & { prompt?: () => Promise<void> } | null>(null);
   useEffect(() => {
+    // Hide install prompt if running in standalone mode (PWA) or Android APK
     if (window.matchMedia?.("(display-mode: standalone)")?.matches) return;
+    if (navigator.userAgent.includes("GebnaA-Android")) return;
     const dismissed = window.localStorage.getItem("gebna-install-dismissed");
     const handler = (event: Event) => { event.preventDefault(); setPromptEvent(event as Event & { prompt?: () => Promise<void> }); setVisible(!dismissed); };
     window.addEventListener("beforeinstallprompt", handler);
