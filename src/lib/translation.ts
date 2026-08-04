@@ -29,6 +29,15 @@ async function libreTranslate(text: string, source: TranslationLanguage, target:
   return data.translatedText;
 }
 
+async function myMemoryTranslate(text: string, source: TranslationLanguage, target: TranslationLanguage) {
+  const langMap: Record<TranslationLanguage, string> = { en: "en", tr: "tr", ar: "ar" };
+  const url = `https://api.mymemory.translated.net/get?q=${encodeURIComponent(text)}&langpair=${langMap[source]}|${langMap[target]}`;
+  const res = await fetch(url);
+  const data = await res.json().catch(() => null) as { responseData?: { translatedText?: string } } | null;
+  if (!res.ok || !data?.responseData?.translatedText) throw new Error("MyMemory translation failed");
+  return data.responseData.translatedText;
+}
+
 export async function autofillTrilingualText(input: Partial<Record<TranslationLanguage, unknown>>) {
   const en = normalizeText(input.en);
   const tr = normalizeText(input.tr);
@@ -44,7 +53,12 @@ export async function autofillTrilingualText(input: Partial<Record<TranslationLa
     const source = seed.lang === target ? (["en", "tr", "ar"] as const).find((l) => l !== target && out[l]) : seed.lang;
     const sourceText = source ? out[source] : seed.text;
     if (!sourceText) return;
-    out[target] = await libreTranslate(sourceText, (source || seed.lang) as TranslationLanguage, target);
+    try {
+      out[target] = await libreTranslate(sourceText, (source || seed.lang) as TranslationLanguage, target);
+    } catch (e) {
+      // Fallback to MyMemory if LibreTranslate fails
+      out[target] = await myMemoryTranslate(sourceText, (source || seed.lang) as TranslationLanguage, target);
+    }
   }));
 
   return out;
