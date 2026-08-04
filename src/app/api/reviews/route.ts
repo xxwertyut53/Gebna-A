@@ -1,4 +1,5 @@
 import { db } from "@/db";
+import { getCurrentUser } from "@/lib/auth";
 import { reviews } from "@/db/schema";
 import { eq, desc } from "drizzle-orm";
 import { NextRequest, NextResponse } from "next/server";
@@ -26,10 +27,15 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    const body = await request.json();
-    const { productId, userId, customerName, rating, comment } = body;
+    const user = await getCurrentUser();
+    if (!user) {
+      return NextResponse.json({ error: "Authentication required." }, { status: 401 });
+    }
 
-    if (!productId || !customerName || !rating || !comment) {
+    const body = await request.json();
+    const { productId, rating, comment } = body;
+
+    if (!productId || !rating || !comment) {
       return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
     }
 
@@ -39,9 +45,9 @@ export async function POST(request: NextRequest) {
 
     const newReview = await db.insert(reviews).values({
       productId,
-      userId: userId || null,
-      customerName,
-      rating,
+      userId: user.id,
+      customerName: user.name,
+      rating: String(rating),
       comment,
       approved: true, // Auto-approve reviews
     }).returning();
