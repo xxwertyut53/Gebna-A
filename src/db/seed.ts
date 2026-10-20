@@ -5,7 +5,7 @@ import { db, pool } from "@/db";
 import { categories, productImages, products, users } from "@/db/schema";
 import { normalizePhone } from "@/lib/phone";
 
-const imageBase = "https://base44.app/api/apps/6a3067563c27b191946c5e4f/files/mp/public/6a3067563c27b191946c5e4f/";
+const imageBase = "/images/products/";
 const catalog = [
   { slug: "classic", en: "Classic", tr: "Klasik", ar: "سادة", desc: "Simplicity when crafted with perfection. A rich, creamy cheese with an authentic everyday taste.", category: "classic", p300: 139, p600: 239, image: `${imageBase}8cca3ef6d_SAVE_20260625_024331.jpg`, tags: ["Artisan", "Mild"], featured: true },
   { slug: "shamar", en: "Shamar", tr: "Şamar", ar: "شمر", desc: "Creamy cheese with fennel seeds, a light aromatic scent, and a unique flavor for those who love distinction.", category: "special", p300: 139, p600: 239, image: `${imageBase}1b2285eb8_5924799521483328933.jpg`, tags: ["Artisan", "Aromatic"], featured: true },

@@ -3,7 +3,7 @@ import { eq } from "drizzle-orm";
 import { db, pool } from "@/db";
 import { products } from "@/db/schema";
 
-const B = "https://base44.app/api/apps/6a3067563c27b191946c5e4f/files/mp/public/6a3067563c27b191946c5e4f/";
+const B = "/images/products/";
 
 const realData: Array<{
   nameEn: string;
@@ -29,10 +29,10 @@ const realData: Array<{
       `${B}a3fe0d535_SAVE_20260625_024505.jpg`,
     ],
     images300g: [
-      "https://img.freepik.com/premium-photo/farm-fresh-milk-professional-captures-milk-being-collected-from-dairy-cows-farm-emphasizing-freshness-qu-ai-generated-illustration_866663-25099.jpg?w=1480",
+      "/images/products/farm-fresh-milk.jpg",
     ],
     image600g: `${B}8cca3ef6d_SAVE_20260625_024331.jpg`,
-    image300g: "https://img.freepik.com/premium-photo/farm-fresh-milk-professional-captures-milk-being-collected-from-dairy-cows-farm-emphasizing-freshness-qu-ai-generated-illustration_866663-25099.jpg?w=1480",
+    image300g: "/images/products/farm-fresh-milk.jpg",
   },
   {
     nameEn: "Shamar",

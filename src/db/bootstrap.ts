@@ -5,7 +5,7 @@ import { db } from "@/db";
 import { categories, offers, orderItems, orders, products, users } from "@/db/schema";
 import { normalizePhone } from "@/lib/phone";
 
-const B = "https://base44.app/api/apps/6a3067563c27b191946c5e4f/files/mp/public/6a3067563c27b191946c5e4f/";
+const B = "/images/products/";
 
 const CATEGORY_MAP: Record<string, { en: string; tr: string; ar: string }> = {
   classic: { en: "Classic", tr: "Klasik", ar: "كلاسيك" },
@@ -27,8 +27,8 @@ const PRODUCTS: SeedProduct[] = [
     descriptionEn: "Simplicity when crafted with perfection. Gebna-A plain cheese combines rich flavor and creamy texture in every bite, so you can enjoy an authentic taste and quality worth having every day.",
     descriptionAr: "البساطة عندما تُصنع بإتقان. جبنة Gebna-A السادة تجمع بين المذاق الغني والقوام الكريمي في كل لقمة، لتستمتع بطعم أصيل وجودة تستحق أن تتكرر كل يوم.",
     descriptionTr: "Basitlik, ustalıkla yapıldığında güzeldir. Gebna-A sade peyniri, her lokmada zengin tadı ve kremamsı dokusunu bir araya getirerek, her gün tekrar yaşamak isteyeceğiniz özgün bir lezzet ve kalite sunar.",
-    tags: ["سادة", "Artisan", "Mild"], mainImage: `${B}8cca3ef6d_SAVE_20260625_024331.jpg`, image600g: `${B}8cca3ef6d_SAVE_20260625_024331.jpg`, image300g: "https://img.freepik.com/premium-photo/farm-fresh-milk-professional-captures-milk-being-collected-from-dairy-cows-farm-emphasizing-freshness-qu-ai-generated-illustration_866663-25099.jpg?w=1480",
-    images600g: [`${B}8cca3ef6d_SAVE_20260625_024331.jpg`, `${B}a3fe0d535_SAVE_20260625_024505.jpg`], images300g: ["https://img.freepik.com/premium-photo/farm-fresh-milk-professional-captures-milk-being-collected-from-dairy-cows-farm-emphasizing-freshness-qu-ai-generated-illustration_866663-25099.jpg?w=1480"] },
+    tags: ["سادة", "Artisan", "Mild"], mainImage: `${B}8cca3ef6d_SAVE_20260625_024331.jpg`, image600g: `${B}8cca3ef6d_SAVE_20260625_024331.jpg`, image300g: "/images/products/farm-fresh-milk.jpg",
+    images600g: [`${B}8cca3ef6d_SAVE_20260625_024331.jpg`, `${B}a3fe0d535_SAVE_20260625_024505.jpg`], images300g: ["/images/products/farm-fresh-milk.jpg"] },
   { nameEn: "Shamar", category: "special", p300: 139, p600: 239, featured: true,
     descriptionEn: "A mix of creamy cheese and fennel seeds with a light aromatic scent and a unique flavor that gives a different experience for those who love distinction.",
     descriptionAr: "مزيج بين الجبنة الكريمي و حبيبات الشمر برائحة عطرية خفيفة ونكهة فريدة تمنح تجربة مختلفة لمحبي التميز.",
