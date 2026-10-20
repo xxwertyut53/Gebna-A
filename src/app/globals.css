@@ -798,6 +798,7 @@ img { display: block; max-width: 100%; }
 .flavor-options button, .cart-flavor button { padding: 9px 14px; border: 1px solid #dfe5dc; border-radius: 9px; color: #707870; background: white; font-size: 11px; font-weight: 800; transition: .2s; }
 .flavor-options button.selected.cool, .cart-flavor button.selected.cool { border-color: #75b9d8; color: #2d7b9e; background: #effaff; }
 .flavor-options button.selected.spicy, .cart-flavor button.selected.spicy { border-color: #e8846d; color: #bc4f36; background: #fff1ec; }
+.flavor-options button.selected.veryhot, .cart-flavor button.selected.veryhot { border-color: #c62f1e; color: #8f1d10; background: #ffe4dd; }
 .cart-flavor { margin-top: 7px; }.cart-flavor button { padding: 4px 7px; font-size: 9px; }
 .detail-note img { width: 27px; height: 27px; border-radius: 50%; object-fit: cover; }
 .form-error { margin: 8px 0 12px; color: #b94236; font-size: 11px; font-weight: 700; }
