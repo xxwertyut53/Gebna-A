@@ -1121,7 +1121,10 @@ function DownloadPage({ go }: { go: (path: string) => void }) {
   const [installed, setInstalled] = useState(false);
   const [busy, setBusy] = useState(false);
   useEffect(() => {
-    if (window.matchMedia?.("(display-mode: standalone)")?.matches) { go("/home"); return; }
+    const isStandalone = window.matchMedia?.("(display-mode: standalone)")?.matches || 
+                        window.navigator.standalone || 
+                        navigator.userAgent.includes("GebnaA-Android");
+    if (isStandalone) { go("/home"); return; }
     const onPrompt = (event: Event) => { event.preventDefault(); setDeferred(event as BeforeInstallPromptEvent); };
     const onInstalled = () => { setInstalled(true); setDeferred(null); };
     window.addEventListener("beforeinstallprompt", onPrompt);

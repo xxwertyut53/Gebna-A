@@ -29,6 +29,18 @@ yarn-error.log*
 # vercel
 .vercel
 
+# android
+android/.gradle
+android/build
+android/app/build
+android/local.properties
+android/GeneratedPluginRegistrant.java
+android/.idea
+android/*.iml
+android/app/*.iml
+android/captures
+android/.externalNativeBuild
+
 # typescript
 *.tsbuildinfo
 next-env.d.ts
