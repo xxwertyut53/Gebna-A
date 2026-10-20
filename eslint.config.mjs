@@ -1,8 +1,14 @@
+import { dirname } from "node:path";
+import { fileURLToPath } from "node:url";
+import { FlatCompat } from "@eslint/eslintrc";
 import { defineConfig, globalIgnores } from "eslint/config";
-import nextCoreWebVitals from "eslint-config-next/core-web-vitals";
+
+// eslint-config-next ships legacy (eslintrc) configs, so bridge them into flat config.
+const compat = new FlatCompat({
+  baseDirectory: dirname(fileURLToPath(import.meta.url)),
+});
 
 export default defineConfig([
-  // Keep the starter on the flat config export that actually runs under the pinned ESLint/Next toolchain.
-  ...nextCoreWebVitals,
+  ...compat.extends("next/core-web-vitals"),
   globalIgnores([".next/**", "out/**", "build/**", "next-env.d.ts"]),
 ]);
