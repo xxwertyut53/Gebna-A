@@ -2,7 +2,7 @@ import { randomUUID } from "crypto";
 
 export const dynamic = "force-dynamic";
 
-const LOGO_URL = "https://media.base44.com/images/public/6a3067563c27b191946c5e4f/3e74a3750_Gebna_A_Logo-03.jpg";
+const LOGO_PATH = "/logo.png";
 
 function escapeXml(value: string): string {
   return value.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
@@ -17,7 +17,7 @@ export async function GET(request: Request) {
   // Try to embed the brand logo as the web-clip icon (optional — profile installs without it).
   let iconData = "";
   try {
-    const iconRes = await fetch(LOGO_URL, { next: { revalidate: 86400 } });
+    const iconRes = await fetch(`${protocol}://${host}${LOGO_PATH}`, { next: { revalidate: 86400 } });
     if (iconRes.ok) {
       const bytes = new Uint8Array(await iconRes.arrayBuffer());
       iconData = Buffer.from(bytes).toString("base64");

@@ -14,12 +14,18 @@ export async function getCurrentUser(): Promise<User | null> {
   return rows[0]?.user ?? null;
 }
 
-export async function createSession(userId: string) {
+export async function createSession(userId: string, remember = true) {
   const token = crypto.randomUUID() + crypto.randomUUID().replaceAll("-", "");
   const expiresAt = new Date(Date.now() + SESSION_DAYS * 24 * 60 * 60 * 1000);
   await db.insert(sessions).values({ token, userId, expiresAt });
   const cookieStore = await cookies();
-  cookieStore.set(SESSION_COOKIE, token, { httpOnly: true, sameSite: "lax", secure: process.env.NODE_ENV === "production", path: "/", expires: expiresAt });
+  cookieStore.set(SESSION_COOKIE, token, {
+    httpOnly: true,
+    sameSite: "lax",
+    secure: process.env.NODE_ENV === "production",
+    path: "/",
+    ...(remember ? { expires: expiresAt, maxAge: SESSION_DAYS * 24 * 60 * 60 } : {}),
+  });
 }
 
 export async function destroySession() {
