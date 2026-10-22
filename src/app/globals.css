@@ -306,6 +306,11 @@ img { display: block; max-width: 100%; }
 .btn-open-dot.open { background: #d6ffd0; }
 .btn-open-dot.closed { background: #ffe2a8; }
 .btn.is-disabled { opacity: .92; cursor: not-allowed; background: linear-gradient(120deg, #d98a17, #c47a10) !important; box-shadow: 0 8px 18px rgba(196,122,16,.25) !important; color: #fff !important; }
+.booking-block { margin-top: 14px; }
+.booking-sep { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; color: var(--muted); font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .14em; }
+.booking-sep::before, .booking-sep::after { content: ""; flex: 1; height: 1px; background: var(--line); }
+.booking-submit { border-style: dashed !important; }
+.booking-hint { margin: 9px 0 0; color: var(--muted); font-size: 11px; line-height: 1.5; text-align: center; }
 
 /* Splash */
 .splash-page { min-height: 100vh; padding: 40px clamp(28px, 6vw, 100px); display: flex; flex-direction: column; justify-content: center; position: relative; overflow: hidden; color: white; background: var(--green-deep); }
