@@ -24,6 +24,7 @@ export async function POST(request: Request) {
   const images = Array.isArray(body.images) ? body.images.filter((v): v is string => typeof v === "string" && v.length > 0) : [];
   const allImages = productType === "sandwich" ? images : [...images600g, ...images300g];
   const mainImage = typeof body.mainImage === "string" && body.mainImage ? body.mainImage : allImages[0] || null;
+  const flavors = Array.isArray(body.flavors) ? body.flavors.filter((v): v is string => typeof v === "string" && ["cool", "spicy", "veryhot"].includes(v)) : ["cool", "spicy", "veryhot"];
 
   if (productType === "cheese" && (!body.price300g || !body.price600g)) return Response.json({ error: "Both 300g and 600g prices are required for cheese products." }, { status: 400 });
   if (productType === "sandwich" && !body.priceSingle) return Response.json({ error: "Price is required for sandwich products." }, { status: 400 });
@@ -45,6 +46,7 @@ export async function POST(request: Request) {
     descriptionEn: descriptions.en, descriptionTr: descriptions.tr, descriptionAr: descriptions.ar,
     price300g: String(body.price300g || 0), price600g: String(body.price600g || 0),
     priceSingle: productType === "sandwich" ? String(body.priceSingle) : null,
+    flavors,
     image300g: images300g[0] || null, image600g: images600g[0] || null, mainImage,
     images, images300g, images600g,
     tags: Array.isArray(body.tags) ? body.tags : [],

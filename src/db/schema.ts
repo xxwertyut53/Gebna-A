@@ -48,6 +48,7 @@ export const products = pgTable("products", {
   descriptionTr: text("description_tr").notNull(),
   descriptionAr: text("description_ar").notNull(),
   productType: text("product_type").notNull().default("cheese"),
+  flavors: jsonb("flavors").$type<string[]>().default(["cool", "spicy", "veryhot"]).notNull(),
   price300g: numeric("price_300g", { precision: 10, scale: 2 }).notNull(),
   price600g: numeric("price_600g", { precision: 10, scale: 2 }).notNull(),
   priceSingle: numeric("price_single", { precision: 10, scale: 2 }),

@@ -4,7 +4,7 @@ import { orderItems, orders, products } from "@/db/schema";
 import { getCurrentUser } from "@/lib/auth";
 import { sendOrderNotifications } from "@/lib/email";
 
-const validFlavors = new Set(["spicy", "cool", "veryhot"]);
+const validFlavors = new Set(["spicy", "cool", "veryhot", "none"]);
 
 export async function GET(request: Request) {
   const user = await getCurrentUser();

@@ -19,6 +19,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
   if (Array.isArray(body?.images300g)) { updates.images300g = body.images300g; updates.image300g = body.images300g[0] || null; }
   if (Array.isArray(body?.images600g)) { updates.images600g = body.images600g; updates.image600g = body.images600g[0] || null; }
   if (Array.isArray(body?.images)) { updates.images = body.images; }
+  if (Array.isArray(body?.flavors)) { updates.flavors = body.flavors.filter((v): v is string => typeof v === "string" && ["cool", "spicy", "veryhot"].includes(v)); }
   const final600 = Array.isArray(body?.images600g) ? body.images600g as string[] : (existing.images600g || []);
   const final300 = Array.isArray(body?.images300g) ? body.images300g as string[] : (existing.images300g || []);
   const finalSingle = Array.isArray(body?.images) ? body.images as string[] : (existing.images || []);
