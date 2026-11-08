@@ -53,32 +53,41 @@ function useTheme() { return useContext(ThemeContext); }
 // admin settings (key: ui_editor_enabled).
 const UI_EDITOR_SKIP_TAGS = new Set(["SCRIPT", "STYLE", "NOSCRIPT", "TEXTAREA", "INPUT", "SELECT", "OPTION", "SVG", "IMG", "BR", "HR"]);
 
+function mergeDraft(saved: Record<string, string>, draft: Record<string, string | null>): Record<string, string> {
+  const out = { ...saved };
+  for (const key in draft) { const value = draft[key]; if (value === null) delete out[key]; else out[key] = value; }
+  return out;
+}
+
 function useUiTextEditor(
   rootRef: React.RefObject<HTMLElement | null>,
   lang: Language,
   overrides: Record<string, string>,
   editMode: boolean,
-  onSave: (key: string, value: string | null) => void,
+  onSaveAll: (next: Record<string, string>) => void,
 ) {
   const mapRef = useRef(new WeakMap<HTMLElement, { orig: string; key: string; lang: Language }>());
   const applyingRef = useRef(false);
-  const overridesRef = useRef(overrides);
+  const savedRef = useRef(overrides);
+  const draftRef = useRef<Record<string, string | null>>({});
+  const undoRef = useRef<Record<string, string | null>[]>([]);
+  const redoRef = useRef<Record<string, string | null>[]>([]);
+  const sessionRef = useRef<{ pushed: boolean } | null>(null);
   const langRef = useRef(lang);
   const editRef = useRef(editMode);
-  const saveRef = useRef(onSave);
-  overridesRef.current = overrides;
+  const saveAllRef = useRef(onSaveAll);
+  const [canUndo, setCanUndo] = useState(false);
+  const [canRedo, setCanRedo] = useState(false);
+  const [hasChanges, setHasChanges] = useState(false);
+  savedRef.current = overrides;
   langRef.current = lang;
   editRef.current = editMode;
-  saveRef.current = onSave;
+  saveAllRef.current = onSaveAll;
 
-  const commit = (el: HTMLElement) => {
-    const entry = mapRef.current.get(el);
-    if (!entry) return;
-    const text = (el.textContent || "").trim();
-    if (!text) return;
-    if (text === entry.orig.trim()) { if (overridesRef.current[entry.key] !== undefined) saveRef.current(entry.key, null); return; }
-    if (overridesRef.current[entry.key] === text) return;
-    saveRef.current(entry.key, text);
+  const syncFlags = () => {
+    setCanUndo(undoRef.current.length > 0);
+    setCanRedo(redoRef.current.length > 0);
+    setHasChanges(Object.keys(draftRef.current).length > 0);
   };
 
   const runPass = () => {
@@ -87,7 +96,7 @@ function useUiTextEditor(
     applyingRef.current = true;
     try {
       const activeLang = langRef.current;
-      const store = overridesRef.current;
+      const store = mergeDraft(savedRef.current, draftRef.current);
       const editing = editRef.current;
       const elements = root.querySelectorAll<HTMLElement>("*");
       for (const el of elements) {
@@ -119,8 +128,10 @@ function useUiTextEditor(
           el.classList.add("ui-editable");
           if (!el.dataset.uiBound) {
             el.dataset.uiBound = "1";
-            el.addEventListener("blur", () => commit(el));
-            el.addEventListener("keydown", (event) => { const key = (event as KeyboardEvent).key; if (key === "Enter") { event.preventDefault(); el.blur(); } });
+            el.addEventListener("focus", () => { sessionRef.current = { pushed: false }; });
+            el.addEventListener("input", () => commitRef.current(el));
+            el.addEventListener("blur", () => { sessionRef.current = null; commitRef.current(el); runPassRef.current(); });
+            el.addEventListener("keydown", (event) => { if ((event as KeyboardEvent).key === "Enter") { event.preventDefault(); el.blur(); } });
           }
         } else if (el.classList.contains("ui-editable")) {
           el.removeAttribute("contenteditable");
@@ -137,6 +148,77 @@ function useUiTextEditor(
   const runPassRef = useRef(runPass);
   runPassRef.current = runPass;
 
+  // Records the typed text as an unsaved draft change (fired on every keystroke),
+  // so the admin must press Save to apply anything. One undo entry is stored per
+  // focused field so Undo reverts a whole edit, not every keystroke.
+  const commit = (el: HTMLElement) => {
+    const entry = mapRef.current.get(el);
+    if (!entry) return;
+    const text = (el.textContent || "").trim();
+    if (!text) return;
+    const base = entry.orig.trim();
+    const saved = savedRef.current[entry.key];
+    const desired: string | null = text === base ? null : text;
+    const nextDraft = { ...draftRef.current };
+    if (desired === null) {
+      if (saved === undefined) delete nextDraft[entry.key]; else nextDraft[entry.key] = null;
+    } else if (saved === desired) {
+      delete nextDraft[entry.key];
+    } else {
+      nextDraft[entry.key] = desired;
+    }
+    if (JSON.stringify(nextDraft) === JSON.stringify(draftRef.current)) return;
+    const session = sessionRef.current;
+    if (!session) {
+      undoRef.current.push({ ...draftRef.current });
+      redoRef.current = [];
+    } else if (!session.pushed) {
+      undoRef.current.push({ ...draftRef.current });
+      redoRef.current = [];
+      session.pushed = true;
+    }
+    draftRef.current = nextDraft;
+    syncFlags();
+  };
+  const commitRef = useRef(commit);
+  commitRef.current = commit;
+
+  const undo = () => {
+    const previous = undoRef.current.pop();
+    if (previous === undefined) return;
+    redoRef.current.push({ ...draftRef.current });
+    draftRef.current = previous;
+    syncFlags();
+    runPassRef.current();
+  };
+  const redo = () => {
+    const next = redoRef.current.pop();
+    if (next === undefined) return;
+    undoRef.current.push({ ...draftRef.current });
+    draftRef.current = next;
+    syncFlags();
+    runPassRef.current();
+  };
+  const save = () => {
+    if (Object.keys(draftRef.current).length === 0) return;
+    const merged = mergeDraft(savedRef.current, draftRef.current);
+    savedRef.current = merged;
+    draftRef.current = {};
+    undoRef.current = [];
+    redoRef.current = [];
+    if (sessionRef.current) sessionRef.current.pushed = false;
+    syncFlags();
+    runPassRef.current();
+    saveAllRef.current(merged);
+  };
+
+  // Entering or leaving edit mode starts a clean, unsaved session.
+  useEffect(() => {
+    draftRef.current = {}; undoRef.current = []; redoRef.current = []; sessionRef.current = null;
+    syncFlags();
+    runPassRef.current();
+  }, [editMode]);
+
   useEffect(() => {
     const root = rootRef.current;
     if (!root) return;
@@ -148,6 +230,8 @@ function useUiTextEditor(
     observer.observe(root, { childList: true, subtree: true, characterData: true });
     return () => { observer.disconnect(); if (timer) window.clearTimeout(timer); };
   }, [rootRef, editMode, overrides, lang]);
+
+  return { undo, redo, save, canUndo, canRedo, hasChanges };
 }
 
 // Orders are accepted only on Saturday & Sunday (Turkey time). Browsing/cart is always open.
@@ -1337,14 +1421,12 @@ export default function AppShell({ initialPath = "/" }: { initialPath?: string }
   const setLanguage = (next: Language) => setLang(next);
   const setThemeVal = (next: ThemeName) => setTheme(next);
   const isAdminUser = Boolean(user && ["admin", "owner"].includes(user.role));
-  const saveOverride = (key: string, value: string | null) => {
-    const next = { ...overridesRef.current };
-    if (value === null) delete next[key]; else next[key] = value;
+  const saveAllOverrides = (next: Record<string, string>) => {
     overridesRef.current = next;
     setOverrides(next);
     fetch("/api/admin/settings", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ key: "ui_text_overrides", value: next }) }).catch(() => undefined);
   };
-  useUiTextEditor(appRootRef, lang, overrides, editMode && isAdminUser, saveOverride);
+  const editor = useUiTextEditor(appRootRef, lang, overrides, editMode && isAdminUser, saveAllOverrides);
   useEffect(() => { if (!uiEditorEnabled || !isAdminUser) setEditMode(false); }, [uiEditorEnabled, isAdminUser]);
   const go = (nextPath: string) => {
     const [pathname, hash] = nextPath.split("#");
@@ -1374,5 +1456,5 @@ export default function AppShell({ initialPath = "/" }: { initialPath?: string }
   else if (path === "/admin") content = <AdminPage go={go} user={user} catalog={catalog} />;
   else if (path === "/ProductDetail" || path.startsWith("/product/")) content = <ProductDetailPage product={currentProduct} go={go} addToCart={addToCart} cartCount={cartCount} user={user} />;
   else content = <HomePage go={go} addToCart={addToCart} cartCount={cartCount} catalog={catalog} />;
-  return <ThemeContext.Provider value={{ theme, setTheme: setThemeVal }}><LanguageContext.Provider value={{ lang, setLang: setLanguage, t: (key) => copy[lang][key] || copy.en[key] || key }}><div ref={appRootRef} className={`app-root lang-${lang} theme-${theme}${editMode ? " ui-edit-mode" : ""}`} dir={lang === "ar" ? "rtl" : "ltr"}><motion.div className="scroll-progress" style={{ scaleX: scrollYProgress }} /><AnimatePresence mode="wait"><motion.div key={pathKey} initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} transition={{ duration: .22, ease: [0.22, 1, 0.36, 1] }}>{content}</motion.div></AnimatePresence>{isAdminUser && uiEditorEnabled && <div data-ui-editor className="ui-editor-dock">{editMode ? <div className="ui-editor-bar"><span className="ui-editor-dot" /><span className="ui-editor-bar-text">Edit mode · click any text to edit</span><button className="ui-editor-done" onClick={() => setEditMode(false)}>Done</button></div> : <button className="ui-editor-fab" onClick={() => setEditMode(true)} title="Edit website UI"><Icon name="edit" size={18} /><span>Edit UI</span></button>}</div>}<InstallPrompt /></div></LanguageContext.Provider></ThemeContext.Provider>;
+  return <ThemeContext.Provider value={{ theme, setTheme: setThemeVal }}><LanguageContext.Provider value={{ lang, setLang: setLanguage, t: (key) => copy[lang][key] || copy.en[key] || key }}><div ref={appRootRef} className={`app-root lang-${lang} theme-${theme}${editMode ? " ui-edit-mode" : ""}`} dir={lang === "ar" ? "rtl" : "ltr"}><motion.div className="scroll-progress" style={{ scaleX: scrollYProgress }} /><AnimatePresence mode="wait"><motion.div key={pathKey} initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} transition={{ duration: .22, ease: [0.22, 1, 0.36, 1] }}>{content}</motion.div></AnimatePresence>{isAdminUser && uiEditorEnabled && <div data-ui-editor className="ui-editor-dock">{editMode ? <div className="ui-editor-bar"><span className={`ui-editor-dot${editor.hasChanges ? " dirty" : ""}`} /><span className="ui-editor-bar-text">{editor.hasChanges ? "Unsaved changes" : "Edit mode · click any text to edit"}</span><button className="ui-editor-icon-btn" onClick={editor.undo} disabled={!editor.canUndo} title="Undo" aria-label="Undo">↶</button><button className="ui-editor-icon-btn" onClick={editor.redo} disabled={!editor.canRedo} title="Redo" aria-label="Redo">↷</button><button className="ui-editor-save" onClick={editor.save} disabled={!editor.hasChanges}>Save</button><button className="ui-editor-done" onClick={() => setEditMode(false)}>Done</button></div> : <button className="ui-editor-fab" onClick={() => setEditMode(true)} title="Edit website UI"><Icon name="edit" size={18} /><span>Edit UI</span></button>}</div>}<InstallPrompt /></div></LanguageContext.Provider></ThemeContext.Provider>;
 }
