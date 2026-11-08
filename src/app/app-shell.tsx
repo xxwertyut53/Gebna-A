@@ -46,6 +46,110 @@ function useI18n() { return useContext(LanguageContext); }
 const ThemeContext = createContext<{ theme: ThemeName; setTheme: (t: ThemeName) => void }>({ theme: "light", setTheme: () => {} });
 function useTheme() { return useContext(ThemeContext); }
 
+// --- Admin website UI editor -------------------------------------------------
+// Lets an admin click any pure-text element on the site and retype it. Overrides
+// are keyed by `${lang}::${originalText}` and persisted in app_settings so every
+// visitor sees the edited copy. The floating button itself is controlled from
+// admin settings (key: ui_editor_enabled).
+const UI_EDITOR_SKIP_TAGS = new Set(["SCRIPT", "STYLE", "NOSCRIPT", "TEXTAREA", "INPUT", "SELECT", "OPTION", "SVG", "IMG", "BR", "HR"]);
+
+function useUiTextEditor(
+  rootRef: React.RefObject<HTMLElement | null>,
+  lang: Language,
+  overrides: Record<string, string>,
+  editMode: boolean,
+  onSave: (key: string, value: string | null) => void,
+) {
+  const mapRef = useRef(new WeakMap<HTMLElement, { orig: string; key: string; lang: Language }>());
+  const applyingRef = useRef(false);
+  const overridesRef = useRef(overrides);
+  const langRef = useRef(lang);
+  const editRef = useRef(editMode);
+  const saveRef = useRef(onSave);
+  overridesRef.current = overrides;
+  langRef.current = lang;
+  editRef.current = editMode;
+  saveRef.current = onSave;
+
+  const commit = (el: HTMLElement) => {
+    const entry = mapRef.current.get(el);
+    if (!entry) return;
+    const text = (el.textContent || "").trim();
+    if (!text) return;
+    if (text === entry.orig.trim()) { if (overridesRef.current[entry.key] !== undefined) saveRef.current(entry.key, null); return; }
+    if (overridesRef.current[entry.key] === text) return;
+    saveRef.current(entry.key, text);
+  };
+
+  const runPass = () => {
+    const root = rootRef.current;
+    if (!root || applyingRef.current) return;
+    applyingRef.current = true;
+    try {
+      const activeLang = langRef.current;
+      const store = overridesRef.current;
+      const editing = editRef.current;
+      const elements = root.querySelectorAll<HTMLElement>("*");
+      for (const el of elements) {
+        if (el.closest("[data-ui-editor]")) continue;
+        if (UI_EDITOR_SKIP_TAGS.has(el.tagName)) continue;
+        if (el.isContentEditable && document.activeElement === el) continue; // don't fight the admin mid-edit
+        const nodes = el.childNodes;
+        let textOnly = nodes.length > 0;
+        if (textOnly) for (let i = 0; i < nodes.length; i++) { if (nodes[i].nodeType !== 3) { textOnly = false; break; } }
+        if (!textOnly) continue;
+        const current = el.textContent || "";
+        if (!current.trim()) continue;
+        let entry = mapRef.current.get(el);
+        if (entry && entry.lang === activeLang) {
+          const existing = store[entry.key];
+          // Keep the entry only if the DOM still shows either the original or our
+          // override. If React changed the text (dynamic values), re-key from scratch.
+          const stillKnown = existing !== undefined ? (current === existing || current === entry.orig) : current === entry.orig;
+          if (!stillKnown) entry = undefined;
+        } else {
+          entry = undefined;
+        }
+        if (!entry) {
+          entry = { orig: current, key: `${activeLang}::${current.trim()}`, lang: activeLang };
+          mapRef.current.set(el, entry);
+        }
+        if (editing) {
+          if (!el.isContentEditable) el.setAttribute("contenteditable", "true");
+          el.classList.add("ui-editable");
+          if (!el.dataset.uiBound) {
+            el.dataset.uiBound = "1";
+            el.addEventListener("blur", () => commit(el));
+            el.addEventListener("keydown", (event) => { const key = (event as KeyboardEvent).key; if (key === "Enter") { event.preventDefault(); el.blur(); } });
+          }
+        } else if (el.classList.contains("ui-editable")) {
+          el.removeAttribute("contenteditable");
+          el.classList.remove("ui-editable");
+        }
+        const replacement = store[entry.key];
+        const desired = replacement !== undefined ? replacement : entry.orig;
+        if (el.textContent !== desired) el.textContent = desired;
+      }
+    } finally {
+      applyingRef.current = false;
+    }
+  };
+  const runPassRef = useRef(runPass);
+  runPassRef.current = runPass;
+
+  useEffect(() => {
+    const root = rootRef.current;
+    if (!root) return;
+    if (!editMode && Object.keys(overrides).length === 0) return;
+    let timer = 0;
+    const schedule = () => { if (timer) return; timer = window.setTimeout(() => { timer = 0; runPassRef.current(); }, 60); };
+    runPassRef.current();
+    const observer = new MutationObserver(() => { if (!applyingRef.current) schedule(); });
+    observer.observe(root, { childList: true, subtree: true, characterData: true });
+    return () => { observer.disconnect(); if (timer) window.clearTimeout(timer); };
+  }, [rootRef, editMode, overrides, lang]);
+}
+
 // Orders are accepted only on Saturday & Sunday (Turkey time). Browsing/cart is always open.
 function isOrderingDay(now: Date = new Date()) {
   try { const wd = new Intl.DateTimeFormat("en-US", { timeZone: "Europe/Istanbul", weekday: "short" }).format(now); return wd === "Sat" || wd === "Sun"; }
@@ -865,9 +969,11 @@ function AdminToolsPanel({ tab, catalog }: { tab: string; catalog: Product[] }) 
   const [flavorsList, setFlavorsList] = useState<string[]>([]);
   const [newFlavorText, setNewFlavorText] = useState("");
   const [saved, setSaved] = useState("");
+  const [uiEditorEnabled, setUiEditorEnabled] = useState(false);
   useEffect(() => {
     if (tab === "Database") fetch("/api/admin/users").then((response) => response.ok ? response.json() : null).then((data) => setUsersData(data?.users || [])).catch(() => undefined);
     if (tab === "Varieties (الأصناف)") fetch("/api/admin/categories").then((response) => response.ok ? response.json() : null).then((data) => setCategoriesData(data?.categories || [])).catch(() => undefined);
+    if (tab === "Settings / Themes") fetch("/api/admin/settings").then((response) => response.ok ? response.json() : null).then((data) => { const found = (data?.settings || []).find((item: { key: string }) => item.key === "ui_editor_enabled"); setUiEditorEnabled(found?.value === true); }).catch(() => undefined);
     if (tab === "Flavors (النكهات)") {
       const savedFlavors = window.localStorage.getItem("gebna-flavors-list");
       if (savedFlavors) setFlavorsList(JSON.parse(savedFlavors));
@@ -893,6 +999,12 @@ function AdminToolsPanel({ tab, catalog }: { tab: string; catalog: Product[] }) 
     window.localStorage.setItem("gebna-flavors-list", JSON.stringify(updated));
   };
 
+  const toggleUiEditor = async () => {
+    const next = !uiEditorEnabled;
+    setUiEditorEnabled(next);
+    await fetch("/api/admin/settings", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ key: "ui_editor_enabled", value: next }) }).catch(() => undefined);
+  };
+
   if (tab === "Database") { const customerCount = usersData.filter((u) => u.role === "customer").length; return <div className="admin-body"><div className="admin-section-head"><div><h2>Customer database</h2><p>All registered accounts. Customer phone numbers are visible to the owner only.</p></div><span className="count-badge">{customerCount} customer{customerCount === 1 ? "" : "s"} · {usersData.length} total</span></div><div className="admin-panel data-table"><div className="table-head"><span>Name</span><span>Email</span><span>Phone</span><span>Role</span></div>{usersData.length ? usersData.map((account) => <div className="table-row" key={account.id}><b>{account.name}</b><span>{account.email}</span><strong>{account.phone}</strong><span className={`role-pill role-${account.role}`}>{account.role === "owner" ? "Owner (you)" : account.role}</span></div>) : <p className="admin-empty">No accounts yet. They appear here the moment someone registers.</p>}</div></div>; }
   if (tab === "Varieties (الأصناف)") return <div className="admin-body"><div className="admin-section-head"><div><h2>Varieties (الأصناف)</h2><p>Manage the home-page الأصناف categories in Arabic, Turkish, and English.</p></div><Button onClick={() => setSaved("Category editor is connected to the admin API.")}>Add variety <Icon name="plus" size={15} /></Button></div><div className="admin-panel category-manager">{categoriesData.map((category) => <div className="category-row" key={category.id}><div className="variety-dot" /><div><b>{category.nameEn}</b><span>{category.nameTr} · {category.nameAr}</span></div><button className={`toggle ${category.active ? "on" : ""}`} onClick={async () => { await fetch("/api/admin/categories", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...category, active: !category.active }) }); setCategoriesData((current) => current.map((item) => item.id === category.id ? { ...item, active: !item.active } : item)); }}><span /></button></div>)}</div>{saved && <p className="admin-inline-note">{saved}</p>}</div>;
   if (tab === "Flavors (النكهات)") return <div className="admin-body"><div className="admin-section-head"><div><h2>Flavors (النكهات)</h2><p>Manage the list of flavors customers can choose from for sandwiches and cheese.</p></div></div>
@@ -901,7 +1013,7 @@ function AdminToolsPanel({ tab, catalog }: { tab: string; catalog: Product[] }) 
       <div className="sandwich-flavors" style={{ margin: 0 }}>{flavorsList.map((f) => <div key={f} className="sandwich-flavor-chip selected" style={{ display: "inline-flex", alignItems: "center", gap: "8px" }}><span>{f}</span><button type="button" onClick={() => removeFlavorItem(f)} style={{ background: "none", border: "none", color: "red", cursor: "pointer", fontWeight: "bold" }}>×</button></div>)}</div>
     </div></div>;
   if (tab === "Sales Report") { const average = catalog.length ? Math.round(catalog.reduce((sum, product) => sum + product.price600, 0) / catalog.length) : 0; return <div className="admin-body"><div className="admin-section-head"><div><h2>Sales report</h2><p>Live catalog performance and revenue-ready reporting.</p></div><Button variant="outline">Export CSV <Icon name="arrow" size={15} /></Button></div><div className="stat-grid"><StatCard icon="bag" label="Active products" value={String(catalog.length)} detail="Available in catalog" /><StatCard icon="orders" label="Average 600g price" value={`₺${average}`} detail="Based on current catalog" accent="yellow" /><StatCard icon="spark" label="Top variety" value={catalog[0]?.name || "—"} detail="Featured collection" accent="purple" /><StatCard icon="users" label="Sales channel" value="App + WhatsApp" detail="Owner notified by Gmail" accent="blue" /></div></div>; }
-  return <div className="admin-body"><div className="admin-section-head"><div><h2>Theme settings</h2><p>Global theme controls start in light mode for every new shopper.</p></div></div><div className="admin-panel theme-manager"><div><span className="theme-swatch theme-green" /><b>Brand green</b><small>#309e2b</small></div><div><span className="theme-swatch theme-yellow" /><b>Brand yellow</b><small>#f3d525</small></div><div><span className="theme-swatch theme-paper" /><b>Light surface</b><small>#f2f2f2</small></div><p>Use the user Settings page to switch between light and dark appearance. The light theme remains the default for new visitors.</p></div></div>;
+  return <div className="admin-body"><div className="admin-section-head"><div><h2>Settings &amp; themes</h2><p>Control site-wide appearance and admin tools.</p></div></div><div className="admin-panel" style={{ marginBottom: 16 }}><div className="setting-row" style={{ padding: "6px 20px" }}><div className="setting-icon"><Icon name="edit" size={18} /></div><div className="setting-copy"><b>Website UI editor button</b><span>Shows a floating “Edit UI” button on the storefront so admins can click any text and edit it. Turn off to hide the button everywhere.</span></div><button className={`toggle ${uiEditorEnabled ? "on" : ""}`} onClick={toggleUiEditor} aria-pressed={uiEditorEnabled} aria-label="Toggle website UI editor button"><span /></button></div></div><div className="admin-panel theme-manager"><div><span className="theme-swatch theme-green" /><b>Brand green</b><small>#309e2b</small></div><div><span className="theme-swatch theme-yellow" /><b>Brand yellow</b><small>#f3d525</small></div><div><span className="theme-swatch theme-paper" /><b>Light surface</b><small>#f2f2f2</small></div><p>Use the user Settings page to switch between light and dark appearance. The light theme remains the default for new visitors.</p></div></div>;
 }
 
 function AdminAI() {
@@ -1198,6 +1310,11 @@ export default function AppShell({ initialPath = "/" }: { initialPath?: string }
   const [user, setUser] = useState<User | null>(null);
   const [theme, setTheme] = useState<ThemeName>("light");
   const [lang, setLang] = useState<Language>("ar");
+  const [uiEditorEnabled, setUiEditorEnabled] = useState(false);
+  const [overrides, setOverrides] = useState<Record<string, string>>({});
+  const [editMode, setEditMode] = useState(false);
+  const overridesRef = useRef<Record<string, string>>({});
+  const appRootRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
     try {
       const saved = window.localStorage.getItem("gebna-cart"); if (saved) setCart((JSON.parse(saved) as CartItem[]).filter((item) => item.id).map((item) => ({ ...item, flavorChoice: item.flavorChoice || "cool" })));
@@ -1211,9 +1328,24 @@ export default function AppShell({ initialPath = "/" }: { initialPath?: string }
     fetch("/api/catalog").then((response) => response.ok ? response.json() : null).then((data) => { if (!data?.products?.length) return; const next = data.products.map((item: Record<string, unknown>) => { const category = data.categories?.find((cat: Record<string, unknown>) => cat.id === item.categoryId); const image = String(item.mainImage || item.image600g || item.image300g || item.image || ""); const pType = String(item.productType || "cheese") as "cheese" | "sandwich"; return { id: String(item.id), slug: String(item.nameEn).trim().toLowerCase().replace(/[^a-z0-9]+/g, "-"), name: String(item.nameEn), nameAr: String(item.nameAr), nameTr: String(item.nameTr), descriptionAr: String(item.descriptionAr), descriptionTr: String(item.descriptionTr), productType: pType, price300: Number(item.price300g), price600: Number(item.price600g), priceSingle: item.priceSingle ? Number(item.priceSingle) : undefined, image, images: Array.isArray(item.images) ? item.images as string[] : [], images300g: Array.isArray(item.images300g) ? item.images300g as string[] : [String(item.image300g || image)], images600g: Array.isArray(item.images600g) ? item.images600g as string[] : [String(item.image600g || image)], description: String(item.descriptionEn), category: String(category?.nameEn || "Special"), tags: Array.isArray(item.tags) ? item.tags as string[] : [], flavors: Array.isArray(item.flavors) ? item.flavors as string[] : ["cool", "spicy", "veryhot"], featured: Boolean(item.featured), stockStatus: String(item.stockStatus) } as Product; }); setCatalog(next); }).catch(() => undefined);
     return () => window.removeEventListener("popstate", onPop);
   }, []);
+  // Re-read the UI editor setting + text overrides on every navigation so the
+  // floating button reflects changes made in the admin dashboard in this session.
+  useEffect(() => {
+    fetch("/api/content").then((response) => response.ok ? response.json() : null).then((data) => { if (!data) return; setUiEditorEnabled(data.uiEditorEnabled === true); const ov = (data.overrides || {}) as Record<string, string>; overridesRef.current = ov; setOverrides((prev) => JSON.stringify(prev) === JSON.stringify(ov) ? prev : ov); }).catch(() => undefined);
+  }, [path]);
   useEffect(() => { try { window.localStorage.setItem("gebna-cart", JSON.stringify(cart)); window.localStorage.setItem("gebna-lang", lang); window.localStorage.setItem("gebna-theme", theme); } catch { /* local storage is optional */ } }, [cart, lang, theme]);
   const setLanguage = (next: Language) => setLang(next);
   const setThemeVal = (next: ThemeName) => setTheme(next);
+  const isAdminUser = Boolean(user && ["admin", "owner"].includes(user.role));
+  const saveOverride = (key: string, value: string | null) => {
+    const next = { ...overridesRef.current };
+    if (value === null) delete next[key]; else next[key] = value;
+    overridesRef.current = next;
+    setOverrides(next);
+    fetch("/api/admin/settings", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ key: "ui_text_overrides", value: next }) }).catch(() => undefined);
+  };
+  useUiTextEditor(appRootRef, lang, overrides, editMode && isAdminUser, saveOverride);
+  useEffect(() => { if (!uiEditorEnabled || !isAdminUser) setEditMode(false); }, [uiEditorEnabled, isAdminUser]);
   const go = (nextPath: string) => {
     const [pathname, hash] = nextPath.split("#");
     if (pathname === path.split("#")[0] && hash) { document.getElementById(hash)?.scrollIntoView({ behavior: "smooth" }); return; }
@@ -1242,5 +1374,5 @@ export default function AppShell({ initialPath = "/" }: { initialPath?: string }
   else if (path === "/admin") content = <AdminPage go={go} user={user} catalog={catalog} />;
   else if (path === "/ProductDetail" || path.startsWith("/product/")) content = <ProductDetailPage product={currentProduct} go={go} addToCart={addToCart} cartCount={cartCount} user={user} />;
   else content = <HomePage go={go} addToCart={addToCart} cartCount={cartCount} catalog={catalog} />;
-  return <ThemeContext.Provider value={{ theme, setTheme: setThemeVal }}><LanguageContext.Provider value={{ lang, setLang: setLanguage, t: (key) => copy[lang][key] || copy.en[key] || key }}><div className={`app-root lang-${lang} theme-${theme}`} dir={lang === "ar" ? "rtl" : "ltr"}><motion.div className="scroll-progress" style={{ scaleX: scrollYProgress }} /><AnimatePresence mode="wait"><motion.div key={pathKey} initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} transition={{ duration: .22, ease: [0.22, 1, 0.36, 1] }}>{content}</motion.div></AnimatePresence><InstallPrompt /></div></LanguageContext.Provider></ThemeContext.Provider>;
+  return <ThemeContext.Provider value={{ theme, setTheme: setThemeVal }}><LanguageContext.Provider value={{ lang, setLang: setLanguage, t: (key) => copy[lang][key] || copy.en[key] || key }}><div ref={appRootRef} className={`app-root lang-${lang} theme-${theme}${editMode ? " ui-edit-mode" : ""}`} dir={lang === "ar" ? "rtl" : "ltr"}><motion.div className="scroll-progress" style={{ scaleX: scrollYProgress }} /><AnimatePresence mode="wait"><motion.div key={pathKey} initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} transition={{ duration: .22, ease: [0.22, 1, 0.36, 1] }}>{content}</motion.div></AnimatePresence>{isAdminUser && uiEditorEnabled && <div data-ui-editor className="ui-editor-dock">{editMode ? <div className="ui-editor-bar"><span className="ui-editor-dot" /><span className="ui-editor-bar-text">Edit mode · click any text to edit</span><button className="ui-editor-done" onClick={() => setEditMode(false)}>Done</button></div> : <button className="ui-editor-fab" onClick={() => setEditMode(true)} title="Edit website UI"><Icon name="edit" size={18} /><span>Edit UI</span></button>}</div>}<InstallPrompt /></div></LanguageContext.Provider></ThemeContext.Provider>;
 }

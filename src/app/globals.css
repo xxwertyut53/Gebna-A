@@ -1435,3 +1435,19 @@ img { display: block; max-width: 100%; }
 .clear-expiry:hover { background: #e8e8e4; color: #4a4d46; }
 .modal-form input[type="datetime-local"] { width: 100%; padding: 10px 12px; border: 1px solid #dfe5dc; border-radius: 8px; font: inherit; font-size: 12px; background: white; color: var(--ink); }
 .modal-form input[type="datetime-local"]:focus { outline: none; border-color: var(--green); box-shadow: 0 0 0 3px rgba(48,158,43,.12); }
+
+/* Admin website UI editor (floating button + inline text editing) */
+.ui-editor-dock { position: fixed; z-index: 90; inset-inline-end: 20px; bottom: 20px; }
+.ui-editor-fab { display: inline-flex; align-items: center; gap: 8px; padding: 11px 16px; border: 0; border-radius: 999px; color: white; background: linear-gradient(135deg, #309e2b, #1f7a1b); box-shadow: 0 12px 26px rgba(20,90,30,.32); font-size: 12px; font-weight: 800; cursor: pointer; transition: transform .15s, box-shadow .2s; }
+.ui-editor-fab:hover { transform: translateY(-2px); box-shadow: 0 16px 32px rgba(20,90,30,.4); }
+.ui-editor-fab:active { transform: scale(.97); }
+.ui-editor-bar { display: inline-flex; align-items: center; gap: 11px; padding: 9px 9px 9px 15px; border-radius: 999px; color: white; background: rgba(18,62,29,.96); box-shadow: 0 14px 34px rgba(10,44,18,.32); font-size: 12px; font-weight: 700; }
+.ui-editor-dot { width: 9px; height: 9px; flex: none; border-radius: 50%; background: #f3d525; box-shadow: 0 0 0 0 rgba(243,213,37,.6); animation: ui-editor-pulse 1.6s ease-out infinite; }
+@keyframes ui-editor-pulse { 70% { box-shadow: 0 0 0 9px rgba(243,213,37,0); } 100% { box-shadow: 0 0 0 0 rgba(243,213,37,0); } }
+.ui-editor-bar-text { white-space: nowrap; }
+.ui-editor-done { padding: 7px 15px; border: 0; border-radius: 999px; color: #14240f; background: var(--yellow); font-size: 12px; font-weight: 900; cursor: pointer; }
+.ui-editor-done:hover { background: #ffe14f; }
+.ui-edit-mode .ui-editable { outline: 1.5px dashed rgba(243,213,37,.9); outline-offset: 2px; border-radius: 4px; cursor: text; transition: outline-color .15s, background .15s; }
+.ui-edit-mode .ui-editable:hover { outline-color: var(--green); background: rgba(48,158,43,.08); }
+.ui-edit-mode .ui-editable:focus { outline: 2px solid var(--green); background: rgba(48,158,43,.1); }
+@media (max-width: 760px) { .ui-editor-dock { inset-inline-end: 12px; bottom: 12px; } .ui-editor-fab span { display: none; } .ui-editor-fab { padding: 13px; } .ui-editor-bar-text { display: none; } }
