@@ -1,18 +1,46 @@
 import { db } from "@/db";
 import { getCurrentUser } from "@/lib/auth";
-import { reviews } from "@/db/schema";
+import { products, reviews } from "@/db/schema";
 import { eq, desc } from "drizzle-orm";
 import { NextRequest, NextResponse } from "next/server";
+
+export const dynamic = "force-dynamic";
 
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
   const productId = searchParams.get("productId");
-
-  if (!productId) {
-    return NextResponse.json({ error: "Product ID is required" }, { status: 400 });
-  }
+  const latest = searchParams.get("latest");
 
   try {
+    // Public "latest reviews" feed used by the storefront reviews section.
+    if (latest) {
+      const limit = Math.min(24, Math.max(1, Number(latest) || 6));
+      const rows = await db
+        .select({
+          id: reviews.id,
+          productId: reviews.productId,
+          customerName: reviews.customerName,
+          rating: reviews.rating,
+          comment: reviews.comment,
+          imageUrl: reviews.imageUrl,
+          imageApproved: reviews.imageApproved,
+          createdAt: reviews.createdAt,
+          productName: products.nameEn,
+          productNameAr: products.nameAr,
+          productNameTr: products.nameTr,
+        })
+        .from(reviews)
+        .innerJoin(products, eq(reviews.productId, products.id))
+        .where(eq(reviews.approved, true))
+        .orderBy(desc(reviews.createdAt))
+        .limit(limit);
+      return NextResponse.json(rows);
+    }
+
+    if (!productId) {
+      return NextResponse.json({ error: "Product ID is required" }, { status: 400 });
+    }
+
     const productReviews = await db.query.reviews.findMany({
       where: eq(reviews.productId, productId),
       orderBy: [desc(reviews.createdAt)],
@@ -33,7 +61,7 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
-    const { productId, rating, comment } = body;
+    const { productId, rating, comment, imageUrl } = body;
 
     if (!productId || !rating || !comment) {
       return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
@@ -43,13 +71,17 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Rating must be between 1 and 5" }, { status: 400 });
     }
 
+    const photo = typeof imageUrl === "string" && imageUrl.startsWith("data:image") ? imageUrl : null;
+
     const newReview = await db.insert(reviews).values({
       productId,
       userId: user.id,
       customerName: user.name,
       rating: String(rating),
       comment,
-      approved: true, // Auto-approve reviews
+      imageUrl: photo,
+      imageApproved: false, // customer photos wait for admin approval
+      approved: true, // text reviews are auto-approved
     }).returning();
 
     return NextResponse.json(newReview[0], { status: 201 });

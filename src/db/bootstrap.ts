@@ -1,6 +1,6 @@
 import bcrypt from "bcryptjs";
 import { execSync } from "child_process";
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { db } from "@/db";
 import { categories, offers, orderItems, orders, products, users } from "@/db/schema";
 import { normalizePhone } from "@/lib/phone";
@@ -149,6 +149,16 @@ async function seedDemo() {
   if (!offer) await db.insert(offers).values({ titleEn: "Weekend cheese lovers", titleTr: "Hafta sonu peynir severler", titleAr: "عشاق الجبن في نهاية الأسبوع", descriptionEn: "10% off the whole cart every Saturday & Sunday.", descriptionTr: "Her Cumartesi ve Pazar sepette %10 indirim.", descriptionAr: "خصم ١٠٪ على السلة كل سبت وأحد.", type: "percentage", discountPercent: "10", active: true });
 }
 
+// Adds columns introduced after the initial schema push. Safe to run on every boot.
+async function ensureExtraColumns() {
+  try {
+    await db.execute(sql`ALTER TABLE reviews ADD COLUMN IF NOT EXISTS image_url text`);
+    await db.execute(sql`ALTER TABLE reviews ADD COLUMN IF NOT EXISTS image_approved boolean NOT NULL DEFAULT false`);
+  } catch (error) {
+    console.error("[bootstrap] ensure extra columns failed", error instanceof Error ? error.message : error);
+  }
+}
+
 let bootstrapping: Promise<void> | null = null;
 
 export function bootstrapDb(): Promise<void> {
@@ -156,6 +166,7 @@ export function bootstrapDb(): Promise<void> {
   bootstrapping = (async () => {
     try {
       // ensureSchema();  // Skip for now, we pushed schema manually!
+      await ensureExtraColumns();
       const categoryIds = await seedCategories();
       const p = await seedProducts(categoryIds);
       await seedOwner();
