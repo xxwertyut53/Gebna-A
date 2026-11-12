@@ -278,6 +278,7 @@ function productFlavors(product: Product): FlavorChoice[] {
 type IconName =
   | "arrow"
   | "bag"
+  | "bell"
   | "cart"
   | "chevron"
   | "clock"
@@ -415,6 +416,7 @@ function Icon({ name, size = 18 }: { name: IconName; size?: number }) {
   const paths: Record<IconName, React.ReactNode> = {
     arrow: <><path d="M5 12h14" /><path d="m13 6 6 6-6 6" /></>,
     bag: <><path d="M6 8h12l1 12H5L6 8Z" /><path d="M9 8a3 3 0 0 1 6 0" /></>,
+    bell: <><path d="M6 9a6 6 0 0 1 12 0c0 5 2 6 2 6H4s2-1 2-6Z" /><path d="M10 19a2 2 0 0 0 4 0" /></>,
     cart: <><path d="M3 4h2l2.1 10.1a2 2 0 0 0 2 1.6h7.8a2 2 0 0 0 1.9-1.4L20 8H6" /><circle cx="10" cy="20" r="1" /><circle cx="17" cy="20" r="1" /></>,
     chevron: <path d="m6 9 6 6 6-6" />,
     clock: <><circle cx="12" cy="12" r="9" /><path d="M12 7v5l3 2" /></>,
@@ -796,21 +798,59 @@ function LoginPage({ go, onAuth }: { go: (path: string) => void; onAuth: (user: 
   const { t, lang } = useI18n();
   const [showPassword, setShowPassword] = useState(false);
   const [remember, setRemember] = useState(true);
+  const [email, setEmail] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
-  useEffect(() => { const saved = window.localStorage.getItem("gebna-remember-email"); if (saved) setRemember(true); }, []);
-  return <AuthLayout title={t("login")} subtitle={lang === "ar" ? "سجّل الدخول إلى حسابك" : "Log in to your account"} footer={<>{lang === "ar" ? "ليس لديك حساب؟" : "Don't have an account?"} <button onClick={() => go("/register")}>{t("register")}</button></>}><div className="auth-phone-note"><Icon name="phone" size={14} /> Phone verification is required for every login.</div><div className="or-divider"><span>or</span></div>{error && <p className="form-error">{error}</p>}<form className="auth-form" onSubmit={async (event) => { event.preventDefault(); setLoading(true); setError(""); const form = new FormData(event.currentTarget); const email = form.get("email") as string; const phone = form.get("phone") as string; const password = form.get("password") as string; if (remember) { window.localStorage.setItem("gebna-remember-email", email); window.localStorage.setItem("gebna-remember-phone", phone); } else { window.localStorage.removeItem("gebna-remember-email"); window.localStorage.removeItem("gebna-remember-phone"); } const response = await fetch("/api/auth/login", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ email, phone, password, remember }) }); const data = await response.json(); setLoading(false); if (!response.ok) { setError(data.error || "Unable to log in."); return; } onAuth(data.user); go(data.user.role === "admin" || data.user.role === "owner" ? "/admin" : "/home"); }}><Field label="Email" name="email" placeholder="you@example.com" required /><Field label={t("phone")} name="phone" placeholder="+90 551 066 82 89" required /><label className="field"><div className="field-label-row"><span>Password *</span><button type="button" onClick={() => go("/forgot-password")}>Forgot password?</button></div><div className="password-wrap"><input name="password" type={showPassword ? "text" : "password"} placeholder="••••••••" required /><button type="button" onClick={() => setShowPassword(!showPassword)}>{showPassword ? "Hide" : "Show"}</button></div></label><label className="remember-row"><input type="checkbox" checked={remember} onChange={(event) => setRemember(event.target.checked)} /> <span>{t("rememberMe")}</span></label><Button type="submit" className="full-width">{loading ? "Signing in..." : t("login")}</Button></form></AuthLayout>;
+  // Prefill the email saved on this device so you don't retype it every time.
+  useEffect(() => { const savedEmail = window.localStorage.getItem("gebna-remember-email"); if (savedEmail) { setEmail(savedEmail); setRemember(true); } }, []);
+  return <AuthLayout title={t("login")} subtitle={lang === "ar" ? "سجّل الدخول بالبريد وكلمة المرور" : "Log in with your email and password"} footer={<>{lang === "ar" ? "ليس لديك حساب؟" : "Don't have an account?"} <button onClick={() => go("/register")}>{t("register")}</button></>}>{error && <p className="form-error">{error}</p>}<form className="auth-form" onSubmit={async (event) => { event.preventDefault(); setLoading(true); setError(""); const form = new FormData(event.currentTarget); const password = form.get("password") as string; const cleanEmail = email.trim().toLowerCase(); if (remember) window.localStorage.setItem("gebna-remember-email", cleanEmail); else window.localStorage.removeItem("gebna-remember-email"); const response = await fetch("/api/auth/login", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ email: cleanEmail, password, remember }) }); const data = await response.json(); setLoading(false); if (!response.ok) { setError(data.error || "Unable to log in."); return; } onAuth(data.user); go(data.user.role === "admin" || data.user.role === "owner" ? "/admin" : "/home"); }}><Field label="Email" name="email" placeholder="you@example.com" required value={email} onChange={(value) => setEmail(value)} /><label className="field"><div className="field-label-row"><span>Password *</span><button type="button" onClick={() => go("/forgot-password")}>Forgot password?</button></div><div className="password-wrap"><input name="password" type={showPassword ? "text" : "password"} placeholder="••••••••" required /><button type="button" onClick={() => setShowPassword(!showPassword)}>{showPassword ? "Hide" : "Show"}</button></div></label><label className="remember-row"><input type="checkbox" checked={remember} onChange={(event) => setRemember(event.target.checked)} /> <span>{t("rememberMe")}</span></label><Button type="submit" className="full-width">{loading ? "Signing in..." : t("login")}</Button></form><p className="auth-hint">{lang === "ar" ? "نطلب رقم هاتفك عند إنشاء الحساب فقط، وليس عند تسجيل الدخول." : "We only ask for your phone number when you sign up, never when you log in."}</p></AuthLayout>;
 }
 
 function RegisterPage({ go, onAuth }: { go: (path: string) => void; onAuth: (user: User) => void }) {
+  const { lang } = useI18n();
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
-  return <AuthLayout title="Create an account" subtitle="Join the Gebna-A family" footer={<>Already have an account? <button onClick={() => go("/login")}>Log in</button></>}><form className="auth-form" onSubmit={async (event) => { event.preventDefault(); setLoading(true); setError(""); const form = new FormData(event.currentTarget); const response = await fetch("/api/auth/register", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name: form.get("name"), email: form.get("email"), phone: form.get("phone"), password: form.get("password") }) }); const data = await response.json(); setLoading(false); if (!response.ok) { setError(data.error || "Unable to create account."); return; } onAuth(data.user); go("/home"); }}><Field label="Full Name" name="name" placeholder="Your name" required /><Field label="Email" name="email" placeholder="you@example.com" required /><Field label="Phone Number" name="phone" placeholder="+90 551 066 82 89" required /><Field label="Password" name="password" placeholder="••••••••" required />{error && <p className="form-error">{error}</p>}<Button type="submit" className="full-width">{loading ? "Creating..." : "Create account"}</Button></form></AuthLayout>;
+  return <AuthLayout title="Create an account" subtitle="Join the Gebna-A family" footer={<>Already have an account? <button onClick={() => go("/login")}>Log in</button></>}><form className="auth-form" onSubmit={async (event) => { event.preventDefault(); setLoading(true); setError(""); const form = new FormData(event.currentTarget); const response = await fetch("/api/auth/register", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name: form.get("name"), email: form.get("email"), phone: form.get("phone"), password: form.get("password") }) }); const data = await response.json(); setLoading(false); if (!response.ok) { setError(data.error || "Unable to create account."); return; } onAuth(data.user); go("/home"); }}><Field label="Full Name" name="name" placeholder="Your name" required /><Field label="Email" name="email" placeholder="you@example.com" required /><Field label="Phone Number" name="phone" placeholder="+90 551 066 82 89" required />{error && <p className="form-error">{error}</p>}<p className="auth-hint">{lang === "ar" ? "أدخل رقم هاتف حقيقي مع رمز الدولة — نستخدمه للتوصيل فقط، ولن نطلبه عند تسجيل الدخول." : "Use a real phone number with its country code — it's only needed for delivery, and we won't ask for it when you log in."}</p><Field label="Password" name="password" placeholder="••••••••" required /><Button type="submit" className="full-width">{loading ? "Creating..." : "Create account"}</Button></form></AuthLayout>;
 }
 
-function PasswordPage({ go, reset = false }: { go: (path: string) => void; reset?: boolean }) {
-  const [sent, setSent] = useState(false);
-  return <AuthLayout title={reset ? "Set a new password" : "Reset password"} subtitle={reset ? "Choose a strong password for your account" : "We&apos;ll send you a link to reset it"} footer={<button onClick={() => go("/login")} className="back-auth">← Back to log in</button>}>{sent ? <div className="sent-message"><span>✓</span><p>If an account exists with that email, you&apos;ll receive a password reset link shortly.</p></div> : <form className="auth-form" onSubmit={(e) => { e.preventDefault(); setSent(true); }}>{!reset && <Field label="Email" placeholder="you@example.com" required />}{reset && <><Field label="New password" placeholder="••••••••" required /><Field label="Confirm password" placeholder="••••••••" required /></>}<Button type="submit" className="full-width">{reset ? "Update password" : "Send reset link"}</Button></form>}</AuthLayout>;
+function PasswordPage({ go }: { go: (path: string) => void }) {
+  const { lang } = useI18n();
+  const [step, setStep] = useState<"email" | "code" | "done">("email");
+  const [email, setEmail] = useState("");
+  const [code, setCode] = useState("");
+  const [password, setPassword] = useState("");
+  const [confirm, setConfirm] = useState("");
+  const [error, setError] = useState("");
+  const [note, setNote] = useState("");
+  const [loading, setLoading] = useState(false);
+  const requestCode = async (event: React.FormEvent) => {
+    event.preventDefault(); setLoading(true); setError(""); setNote("");
+    const cleanEmail = email.trim().toLowerCase();
+    const response = await fetch("/api/auth/forgot-password", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ email: cleanEmail }) });
+    const data = await response.json().catch(() => ({})); setLoading(false);
+    if (!response.ok) { setError(data.error || "Unable to send the code."); return; }
+    setEmail(cleanEmail); setCode(""); setStep("code");
+    setNote(data.emailed === false
+      ? (lang === "ar" ? "تعذّر إرسال البريد من الخادم — اطلب من المالك التحقق من إعدادات Gmail." : "The server couldn't send the email — ask the owner to check the Gmail settings.")
+      : (lang === "ar" ? `أرسلنا رمزاً مكوّناً من 6 أرقام إلى ${cleanEmail}.` : `We emailed a 6-digit code to ${cleanEmail}.`));
+  };
+  const submitCode = async (event: React.FormEvent) => {
+    event.preventDefault(); setError("");
+    if (password.length < 6) { setError(lang === "ar" ? "كلمة المرور يجب أن تكون 6 أحرف على الأقل." : "Password must be at least 6 characters."); return; }
+    if (password !== confirm) { setError(lang === "ar" ? "كلمتا المرور غير متطابقتين." : "The two passwords don't match."); return; }
+    setLoading(true);
+    const response = await fetch("/api/auth/reset-password", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ email, code: code.trim(), password }) });
+    const data = await response.json().catch(() => ({})); setLoading(false);
+    if (!response.ok) { setError(data.error || "Unable to reset the password."); return; }
+    setStep("done");
+  };
+  const title = step === "done" ? (lang === "ar" ? "تم تغيير كلمة المرور" : "Password changed") : step === "code" ? (lang === "ar" ? "أدخل الرمز" : "Enter your code") : (lang === "ar" ? "استعادة كلمة المرور" : "Reset password");
+  const subtitle = step === "code" ? (lang === "ar" ? "تحقق من بريدك ثم اختر كلمة مرور جديدة" : "Check your email, then choose a new password") : (lang === "ar" ? "سنرسل رمزاً لمرة واحدة إلى بريدك" : "We'll email you a one-time code");
+  return <AuthLayout title={title} subtitle={title && subtitle} footer={<button onClick={() => go("/login")} className="back-auth">← Back to log in</button>}>
+    {step === "done" ? <div className="sent-message"><span>✓</span><p>{lang === "ar" ? "تم تحديث كلمة المرور. يمكنك الآن تسجيل الدخول بكلمة المرور الجديدة." : "Your password has been updated. You can now log in with it."}</p><Button onClick={() => go("/login")} className="full-width">{lang === "ar" ? "الذهاب لتسجيل الدخول" : "Go to log in"}</Button></div>
+      : step === "email" ? <form className="auth-form" onSubmit={requestCode}><Field label="Email" name="email" placeholder="you@example.com" required value={email} onChange={(value) => setEmail(value)} />{error && <p className="form-error">{error}</p>}<Button type="submit" className="full-width">{loading ? "Sending..." : "Send code"}</Button></form>
+        : <form className="auth-form" onSubmit={submitCode}>{note && <p className="form-note">{note}</p>}<Field label="6-digit code" name="code" placeholder="123456" required value={code} onChange={(value) => setCode(value.replace(/\D/g, "").slice(0, 6))} /><Field label="New password" name="password" placeholder="••••••••" required value={password} onChange={setPassword} /><Field label="Confirm password" name="confirm" placeholder="••••••••" required value={confirm} onChange={setConfirm} />{error && <p className="form-error">{error}</p>}<Button type="submit" className="full-width">{loading ? "Updating..." : "Update password"}</Button><button type="button" className="resend-code" onClick={requestCode}>{lang === "ar" ? "إعادة إرسال الرمز" : "Resend code"}</button></form>}
+  </AuthLayout>;
 }
 
 function OrdersPage({ go }: { go: (path: string) => void }) {
@@ -838,7 +878,7 @@ function AdminPage({ go, user, catalog }: { go: (path: string) => void; user: Us
   const openEdit = (product: AdminProduct) => { setEditing(product); setShowForm(true); };
   const onSaved = (msg: string) => { setShowForm(false); setToast(msg); setRefreshKey((key) => key + 1); window.setTimeout(() => setToast(""), 2600); };
   if (!user || !["admin", "owner"].includes(user.role)) return <div className="admin-gate"><Brand /><div className="admin-gate-icon"><Icon name="lock" size={30} /></div><h1>Admin access only</h1><p>This dashboard is protected. Sign in with an owner or admin account to continue.</p><Button onClick={() => go("/login")}>Admin login <Icon name="arrow" size={16} /></Button></div>;
-  return <div className="admin-page"><aside className="admin-sidebar"><button className="admin-brand" onClick={() => go("/home")}><Brand /><span className="admin-label">Admin Dashboard</span></button><div className="admin-nav">{tabs.map(([name, icon]) => <button key={name} onClick={() => setTab(name)} className={tab === name ? "active" : ""}><Icon name={icon} size={18} />{name}</button>)}</div><div className="admin-sidebar-bottom"><button onClick={() => go("/settings")}><Icon name="settings" size={17} /> Settings</button><button onClick={() => go("/home")}><Icon name="logout" size={17} /> Back to store</button><div className="admin-user"><div className="admin-avatar">{user.name.slice(0, 2).toUpperCase()}</div><div><b>{user.name}</b><span>{user.role}</span></div><Icon name="chevron" size={14} /></div></div></aside><main className="admin-content"><header className="admin-topbar"><button className="mobile-admin-brand" onClick={() => go("/home")}><Brand /></button><div><span className="admin-kicker">Gebna-A · ADMIN</span><h1>{tab}</h1></div><div className="admin-top-actions"><button className="admin-notification">●<span /></button><button className="admin-profile">{user.name.slice(0, 2).toUpperCase()} <Icon name="chevron" size={14} /></button></div></header>{tab === "Overview" && <AdminOverview go={go} />}{tab === "Products" && <AdminProducts key={refreshKey} onAdd={openAdd} onEdit={openEdit} />}{tab === "Orders" && <AdminOrders />}{tab === "Offers" && <AdminOffers />}{tab === "Reviews" && <AdminReviews />}{["Varieties (الأصناف)", "Flavors (النكهات)", "Database", "Sales Report", "Settings / Themes"].includes(tab) && <AdminToolsPanel tab={tab} catalog={catalog} />}{tab === "AI Assistant" && <AdminAI />}<AnimatePresence>{showForm && <ProductFormModal key={editing?.id || "new"} product={editing} onClose={() => setShowForm(false)} onSaved={onSaved} />}</AnimatePresence><AnimatePresence>{toast && <motion.div className="toast" initial={{ opacity: 0, y: 24, x: 20 }} animate={{ opacity: 1, y: 0, x: 0 }} exit={{ opacity: 0, y: 20, x: 20 }} transition={{ type: "spring", damping: 18, stiffness: 320 }}>{toast}</motion.div>}</AnimatePresence></main></div>;
+  return <div className="admin-page"><aside className="admin-sidebar"><button className="admin-brand" onClick={() => go("/home")}><Brand /><span className="admin-label">Admin Dashboard</span></button><div className="admin-nav">{tabs.map(([name, icon]) => <button key={name} onClick={() => setTab(name)} className={tab === name ? "active" : ""}><Icon name={icon} size={18} />{name}</button>)}</div><div className="admin-sidebar-bottom"><button onClick={() => go("/settings")}><Icon name="settings" size={17} /> Settings</button><button onClick={() => go("/home")}><Icon name="logout" size={17} /> Back to store</button><div className="admin-user"><div className="admin-avatar">{user.name.slice(0, 2).toUpperCase()}</div><div><b>{user.name}</b><span>{user.role}</span></div><Icon name="chevron" size={14} /></div></div></aside><main className="admin-content"><header className="admin-topbar"><button className="mobile-admin-brand" onClick={() => go("/home")}><Brand /></button><div><span className="admin-kicker">Gebna-A · ADMIN</span><h1>{tab}</h1></div><div className="admin-top-actions"><AdminNotificationBell /><button className="admin-profile">{user.name.slice(0, 2).toUpperCase()} <Icon name="chevron" size={14} /></button></div></header>{tab === "Overview" && <AdminOverview go={go} />}{tab === "Products" && <AdminProducts key={refreshKey} onAdd={openAdd} onEdit={openEdit} />}{tab === "Orders" && <AdminOrders />}{tab === "Offers" && <AdminOffers />}{tab === "Reviews" && <AdminReviews />}{["Varieties (الأصناف)", "Flavors (النكهات)", "Database", "Sales Report", "Settings / Themes"].includes(tab) && <AdminToolsPanel tab={tab} catalog={catalog} />}{tab === "AI Assistant" && <AdminAI />}<AnimatePresence>{showForm && <ProductFormModal key={editing?.id || "new"} product={editing} onClose={() => setShowForm(false)} onSaved={onSaved} />}</AnimatePresence><AnimatePresence>{toast && <motion.div className="toast" initial={{ opacity: 0, y: 24, x: 20 }} animate={{ opacity: 1, y: 0, x: 0 }} exit={{ opacity: 0, y: 20, x: 20 }} transition={{ type: "spring", damping: 18, stiffness: 320 }}>{toast}</motion.div>}</AnimatePresence></main></div>;
 }
 
 type OverviewData = {
@@ -939,6 +979,112 @@ function AdminProducts({ onAdd, onEdit }: { onAdd: () => void; onEdit: (product:
 
 type AdminOrder = { id: string; orderCode: string; customerName: string; customerPhone: string; total: number; status: string; createdAt: string; items: Array<{ productName: string; size: string; flavorChoice: string; quantity: number; unitPrice: number }> };
 const ORDER_STATUSES = ["pending", "confirmed", "shipped", "delivered", "cancelled"] as const;
+
+const NOTIF_POLL_MS = 15000;
+let notifAudioCtx: AudioContext | null = null;
+
+function getNotifAudioContext(): AudioContext | null {
+  if (typeof window === "undefined") return null;
+  const Ctor = window.AudioContext || (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+  if (!Ctor) return null;
+  if (!notifAudioCtx) notifAudioCtx = new Ctor();
+  return notifAudioCtx;
+}
+
+// Shopify-style two-note "cha-ching" chime, synthesized with the Web Audio API (no asset needed).
+function playNewOrderChime() {
+  const ctx = getNotifAudioContext();
+  if (!ctx) return;
+  if (ctx.state === "suspended") void ctx.resume().catch(() => {});
+  const start = ctx.currentTime + 0.03;
+  const chord = [{ freq: 1318.51, at: 0 }, { freq: 1760, at: 0.1 }];
+  chord.forEach(({ freq, at }) => {
+    [{ mult: 1, peak: 0.3 }, { mult: 2, peak: 0.09 }, { mult: 3, peak: 0.04 }].forEach(({ mult, peak }) => {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = "sine";
+      osc.frequency.value = freq * mult;
+      gain.gain.setValueAtTime(0.0001, start + at);
+      gain.gain.exponentialRampToValueAtTime(peak, start + at + 0.012);
+      gain.gain.exponentialRampToValueAtTime(0.0001, start + at + 0.6);
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start(start + at);
+      osc.stop(start + at + 0.65);
+    });
+  });
+}
+
+function AdminNotificationBell() {
+  const [orders, setOrders] = useState<AdminOrder[]>([]);
+  const [unread, setUnread] = useState(0);
+  const [open, setOpen] = useState(false);
+  const knownIds = useRef<Set<string> | null>(null);
+  const wrapRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    const load = async () => {
+      try {
+        const response = await fetch("/api/admin/orders");
+        if (!response.ok) return;
+        const data = await response.json();
+        const list: AdminOrder[] = Array.isArray(data?.orders) ? data.orders : [];
+        if (cancelled) return;
+        setOrders(list);
+        const ids = new Set(list.map((order) => order.id));
+        if (knownIds.current === null) {
+          knownIds.current = ids;
+        } else {
+          const fresh = list.filter((order) => !knownIds.current!.has(order.id));
+          if (fresh.length > 0) {
+            knownIds.current = ids;
+            setUnread((count) => count + fresh.length);
+            playNewOrderChime();
+          }
+        }
+      } catch { /* network hiccup — retry next tick */ }
+    };
+    void load();
+    const timer = window.setInterval(load, NOTIF_POLL_MS);
+    return () => { cancelled = true; window.clearInterval(timer); };
+  }, []);
+
+  // Browsers block audio until the first user gesture — unlock the context on any interaction.
+  useEffect(() => {
+    const unlock = () => { const ctx = getNotifAudioContext(); if (ctx && ctx.state === "suspended") void ctx.resume().catch(() => {}); };
+    window.addEventListener("pointerdown", unlock, { once: true });
+    window.addEventListener("keydown", unlock, { once: true });
+    return () => { window.removeEventListener("pointerdown", unlock); window.removeEventListener("keydown", unlock); };
+  }, []);
+
+  useEffect(() => {
+    if (!open) return;
+    const onDown = (event: MouseEvent) => { if (wrapRef.current && !wrapRef.current.contains(event.target as Node)) setOpen(false); };
+    document.addEventListener("mousedown", onDown);
+    return () => document.removeEventListener("mousedown", onDown);
+  }, [open]);
+
+  const toggle = () => setOpen((value) => { const next = !value; if (next) setUnread(0); return next; });
+  const recent = orders.slice(0, 6);
+
+  return <div className="admin-notif-wrap" ref={wrapRef}>
+    <button type="button" className={`admin-notification ${unread > 0 ? "has-unread" : ""}`} onClick={toggle} aria-label="Order notifications" aria-expanded={open}>
+      <Icon name="bell" size={19} />
+      {unread > 0 && <span className="notif-badge">{unread > 9 ? "9+" : unread}</span>}
+    </button>
+    <AnimatePresence>
+      {open && <motion.div className="notif-pop" initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} transition={{ duration: 0.16 }}>
+        <div className="notif-pop-head"><b>New orders</b>{orders.length > 0 && <span>{orders.length} total</span>}</div>
+        {recent.length === 0 ? <p className="notif-empty">No orders yet. New orders appear here with a sound.</p> : recent.map((order) => <button type="button" key={order.id} className="notif-item" onClick={() => setOpen(false)}>
+          <span className="notif-item-icon"><Icon name="bag" size={15} /></span>
+          <span className="notif-item-copy"><b>#{order.orderCode}</b><span>{order.customerName} · ₺{order.total}</span></span>
+          <span className="notif-item-time">{new Date(order.createdAt).toLocaleTimeString("en", { hour: "2-digit", minute: "2-digit" })}</span>
+        </button>)}
+      </motion.div>}
+    </AnimatePresence>
+  </div>;
+}
 
 function AdminOrders() {
   const [orders, setOrders] = useState<AdminOrder[]>([]);
@@ -1575,7 +1721,7 @@ export default function AppShell({ initialPath = "/" }: { initialPath?: string }
   else if (path === "/login") content = <LoginPage go={go} onAuth={setUser} />;
   else if (path === "/register") content = <RegisterPage go={go} onAuth={setUser} />;
   else if (path === "/forgot-password") content = <PasswordPage go={go} />;
-  else if (path === "/reset-password") content = <PasswordPage go={go} reset />;
+  else if (path === "/reset-password") content = <PasswordPage go={go} />;
   else if (path === "/settings") content = <SettingsPage go={go} theme={theme} setTheme={setThemeVal} user={user} onUserUpdate={setUser} />;
   else if (path === "/download") content = <DownloadPage go={go} />;
   else if (path === "/admin") content = <AdminPage go={go} user={user} catalog={catalog} />;

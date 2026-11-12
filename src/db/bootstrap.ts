@@ -149,11 +149,22 @@ async function seedDemo() {
   if (!offer) await db.insert(offers).values({ titleEn: "Weekend cheese lovers", titleTr: "Hafta sonu peynir severler", titleAr: "عشاق الجبن في نهاية الأسبوع", descriptionEn: "10% off the whole cart every Saturday & Sunday.", descriptionTr: "Her Cumartesi ve Pazar sepette %10 indirim.", descriptionAr: "خصم ١٠٪ على السلة كل سبت وأحد.", type: "percentage", discountPercent: "10", active: true });
 }
 
-// Adds columns introduced after the initial schema push. Safe to run on every boot.
+// Adds columns/tables introduced after the initial schema push. Safe to run on every boot.
 async function ensureExtraColumns() {
   try {
     await db.execute(sql`ALTER TABLE reviews ADD COLUMN IF NOT EXISTS image_url text`);
     await db.execute(sql`ALTER TABLE reviews ADD COLUMN IF NOT EXISTS image_approved boolean NOT NULL DEFAULT false`);
+    await db.execute(sql`CREATE TABLE IF NOT EXISTS verification_codes (
+      id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+      email text NOT NULL,
+      code_hash text NOT NULL,
+      purpose text NOT NULL DEFAULT 'password_reset',
+      attempts integer NOT NULL DEFAULT 0,
+      expires_at timestamptz NOT NULL,
+      consumed_at timestamptz,
+      created_at timestamptz NOT NULL DEFAULT now()
+    )`);
+    await db.execute(sql`CREATE INDEX IF NOT EXISTS verification_codes_email_idx ON verification_codes (email, purpose)`);
   } catch (error) {
     console.error("[bootstrap] ensure extra columns failed", error instanceof Error ? error.message : error);
   }

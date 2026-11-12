@@ -92,3 +92,26 @@ Thank you for being a valued part of the Gebna-A family.`;
   await Promise.all(emailPromises);
   return { sent: true, count: subscribers.length };
 }
+
+// Emails a one-time 6-digit code (used for password reset). Returns sent=false when
+// Gmail credentials are missing so the caller can surface a helpful message.
+export async function sendVerificationCode(to: string, code: string, purpose: "password_reset" | "login") {
+  const user = process.env.GMAIL_USER;
+  const password = process.env.GMAIL_APP_PASSWORD;
+  if (!user || !password) {
+    console.info(`[Gebna-A] Verification code email skipped: configure GMAIL_USER and GMAIL_APP_PASSWORD.`);
+    if (process.env.NODE_ENV !== "production") console.info(`[Gebna-A] DEV verification code for ${to}: ${code}`);
+    return { sent: false, reason: "gmail_not_configured" };
+  }
+  const transporter = nodemailer.createTransport({ service: "gmail", auth: { user, pass: password } });
+  const subject = purpose === "password_reset" ? "Gebna-A password reset code" : "Gebna-A login code";
+  const text = `Your Gebna-A verification code is ${code}.\n\nIt expires in 15 minutes and can be used only once. If you did not request this, you can safely ignore this email.`;
+  const html = `<div style="font-family:Arial,sans-serif;max-width:480px;margin:0 auto;padding:28px;color:#17210f">
+    <h2 style="margin:0 0 10px;color:#3f6b2f">Gebna-A</h2>
+    <p style="margin:0 0 18px;color:#5b6b52">Your one-time verification code:</p>
+    <p style="margin:0 0 18px;font-size:34px;letter-spacing:8px;font-weight:800;color:#17210f">${code}</p>
+    <p style="margin:0;color:#8a9781;font-size:13px">This code expires in 15 minutes and can be used only once. If you did not request it, you can safely ignore this email.</p>
+  </div>`;
+  await transporter.sendMail({ from: `"Gebna-A" <${user}>`, to, subject, text, html });
+  return { sent: true };
+}
