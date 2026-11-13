@@ -3,6 +3,7 @@ import { db } from "@/db";
 import { orderItems, orders, products } from "@/db/schema";
 import { getCurrentUser } from "@/lib/auth";
 import { sendOrderNotifications } from "@/lib/email";
+import { sendOrderPushToAdmins } from "@/lib/push";
 
 const validFlavors = new Set(["spicy", "cool", "veryhot", "none"]);
 
@@ -50,5 +51,7 @@ export async function POST(request: Request) {
   const [order] = await db.insert(orders).values({ orderCode, userId: user.id, customerName: body.customerName.trim(), customerEmail: body.customerEmail?.trim() || user.email, customerPhone: body.customerPhone.trim(), deliveryAddress: body.deliveryAddress.trim(), deliveryCity: body.deliveryCity.trim(), deliveryDistrict: body.deliveryDistrict?.trim(), building: body.building?.trim(), floor: body.floor?.trim(), door: body.door?.trim(), locationLat: body.locationLat?.toString(), locationLng: body.locationLng?.toString(), notes: body.notes?.trim(), total: total.toFixed(2), status: "pending", orderSource: isBooking ? "booking" : "in_app" }).returning();
   await db.insert(orderItems).values(prepared.map((item) => ({ orderId: order.id, productId: item.productId, productName: item.productName, size: item.size, flavorChoice: item.flavorChoice, quantity: String(item.quantity), unitPrice: item.unitPrice.toFixed(2) })));
   const notification = await sendOrderNotifications({ orderCode, customerName: order.customerName, customerEmail: order.customerEmail, customerPhone: order.customerPhone, total: total.toFixed(2), items: prepared.map((item) => ({ productName: item.productName, size: item.size, flavorChoice: item.flavorChoice, quantity: String(item.quantity), unitPrice: item.unitPrice.toFixed(2) })) }).catch((error: unknown) => { console.error("Gmail notification failed", error); return { sent: false, reason: "gmail_error" }; });
+  // Fire-and-forget push alert so the owner/admin app rings instantly on a new order.
+  sendOrderPushToAdmins({ orderCode, customerName: order.customerName, total: total.toFixed(2) }).catch((error: unknown) => { console.error("[Gebna-A] Admin order push failed", error); });
   return Response.json({ order: { ...order, total, notification }, whatsappUrl: `https://wa.me/905510668289?text=${encodeURIComponent(`Gebna-A ${isBooking ? "booking" : "order"} ${orderCode} · ${body.customerName} · ₺${total.toFixed(2)}`)}` }, { status: 201 });
 }

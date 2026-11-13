@@ -4,6 +4,7 @@ import { bootstrapDb } from "@/db/bootstrap";
 import { offers } from "@/db/schema";
 import { requireAdmin } from "@/lib/auth";
 import { sendNewOfferNotification } from "@/lib/email";
+import { sendOfferPushToSubscribers } from "@/lib/push";
 
 export const dynamic = "force-dynamic";
 
@@ -61,6 +62,10 @@ export async function POST(request: Request) {
       descriptionAr: offer.descriptionAr,
     }).catch((err) => {
       console.error("[Gebna-A] Failed to broadcast offer emails:", err);
+    });
+    // Push notification to customers who turned on offer alerts (ring with the offer jingle).
+    sendOfferPushToSubscribers({ titleEn: offer.titleEn, titleAr: offer.titleAr, descriptionEn: offer.descriptionEn }).catch((err) => {
+      console.error("[Gebna-A] Failed to broadcast offer push:", err);
     });
   }
 

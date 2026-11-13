@@ -35,6 +35,19 @@ export const verificationCodes = pgTable("verification_codes", {
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
 });
 
+// Web Push subscriptions (Chrome/Safari/Firefox push services). Admins receive order
+// alerts, customers who turned on offer alerts receive new-offer notifications.
+export const pushSubscriptions = pgTable("push_subscriptions", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  endpoint: text("endpoint").notNull(),
+  p256dh: text("p256dh").notNull(),
+  auth: text("auth").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+}, (table) => ({
+  endpointUnique: uniqueIndex("push_subscriptions_endpoint_unique").on(table.endpoint),
+}));
+
 export const categories = pgTable("categories", {
   id: uuid("id").defaultRandom().primaryKey(),
   slug: text("slug").notNull(),

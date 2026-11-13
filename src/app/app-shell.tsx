@@ -878,7 +878,7 @@ function AdminPage({ go, user, catalog }: { go: (path: string) => void; user: Us
   const openEdit = (product: AdminProduct) => { setEditing(product); setShowForm(true); };
   const onSaved = (msg: string) => { setShowForm(false); setToast(msg); setRefreshKey((key) => key + 1); window.setTimeout(() => setToast(""), 2600); };
   if (!user || !["admin", "owner"].includes(user.role)) return <div className="admin-gate"><Brand /><div className="admin-gate-icon"><Icon name="lock" size={30} /></div><h1>Admin access only</h1><p>This dashboard is protected. Sign in with an owner or admin account to continue.</p><Button onClick={() => go("/login")}>Admin login <Icon name="arrow" size={16} /></Button></div>;
-  return <div className="admin-page"><aside className="admin-sidebar"><button className="admin-brand" onClick={() => go("/home")}><Brand /><span className="admin-label">Admin Dashboard</span></button><div className="admin-nav">{tabs.map(([name, icon]) => <button key={name} onClick={() => setTab(name)} className={tab === name ? "active" : ""}><Icon name={icon} size={18} />{name}</button>)}</div><div className="admin-sidebar-bottom"><button onClick={() => go("/settings")}><Icon name="settings" size={17} /> Settings</button><button onClick={() => go("/home")}><Icon name="logout" size={17} /> Back to store</button><div className="admin-user"><div className="admin-avatar">{user.name.slice(0, 2).toUpperCase()}</div><div><b>{user.name}</b><span>{user.role}</span></div><Icon name="chevron" size={14} /></div></div></aside><main className="admin-content"><header className="admin-topbar"><button className="mobile-admin-brand" onClick={() => go("/home")}><Brand /></button><div><span className="admin-kicker">Gebna-A · ADMIN</span><h1>{tab}</h1></div><div className="admin-top-actions"><AdminNotificationBell /><button className="admin-profile">{user.name.slice(0, 2).toUpperCase()} <Icon name="chevron" size={14} /></button></div></header>{tab === "Overview" && <AdminOverview go={go} />}{tab === "Products" && <AdminProducts key={refreshKey} onAdd={openAdd} onEdit={openEdit} />}{tab === "Orders" && <AdminOrders />}{tab === "Offers" && <AdminOffers />}{tab === "Reviews" && <AdminReviews />}{["Varieties (الأصناف)", "Flavors (النكهات)", "Database", "Sales Report", "Settings / Themes"].includes(tab) && <AdminToolsPanel tab={tab} catalog={catalog} />}{tab === "AI Assistant" && <AdminAI />}<AnimatePresence>{showForm && <ProductFormModal key={editing?.id || "new"} product={editing} onClose={() => setShowForm(false)} onSaved={onSaved} />}</AnimatePresence><AnimatePresence>{toast && <motion.div className="toast" initial={{ opacity: 0, y: 24, x: 20 }} animate={{ opacity: 1, y: 0, x: 0 }} exit={{ opacity: 0, y: 20, x: 20 }} transition={{ type: "spring", damping: 18, stiffness: 320 }}>{toast}</motion.div>}</AnimatePresence></main></div>;
+  return <div className="admin-page"><aside className="admin-sidebar"><button className="admin-brand" onClick={() => go("/home")}><Brand /><span className="admin-label">Admin Dashboard</span></button><div className="admin-nav">{tabs.map(([name, icon]) => <button key={name} onClick={() => setTab(name)} className={tab === name ? "active" : ""}><Icon name={icon} size={18} />{name}</button>)}</div><div className="admin-sidebar-bottom"><button onClick={() => go("/settings")}><Icon name="settings" size={17} /> Settings</button><button onClick={() => go("/home")}><Icon name="logout" size={17} /> Back to store</button><div className="admin-user"><div className="admin-avatar">{user.name.slice(0, 2).toUpperCase()}</div><div><b>{user.name}</b><span>{user.role}</span></div><Icon name="chevron" size={14} /></div></div></aside><main className="admin-content"><header className="admin-topbar"><button className="mobile-admin-brand" onClick={() => go("/home")}><Brand /></button><div><span className="admin-kicker">Gebna-A · ADMIN</span><h1>{tab}</h1></div><div className="admin-top-actions"><AdminNotificationBell /><button className="admin-profile">{user.name.slice(0, 2).toUpperCase()} <Icon name="chevron" size={14} /></button></div></header><div className="admin-push-slot"><PushEnableBanner label="Turn on order notifications" copy="Get an instant alert with the Shopify-style chime whenever a new order arrives on this device." /></div>{tab === "Overview" && <AdminOverview go={go} />}{tab === "Products" && <AdminProducts key={refreshKey} onAdd={openAdd} onEdit={openEdit} />}{tab === "Orders" && <AdminOrders />}{tab === "Offers" && <AdminOffers />}{tab === "Reviews" && <AdminReviews />}{["Varieties (الأصناف)", "Flavors (النكهات)", "Database", "Sales Report", "Settings / Themes"].includes(tab) && <AdminToolsPanel tab={tab} catalog={catalog} />}{tab === "AI Assistant" && <AdminAI />}<AnimatePresence>{showForm && <ProductFormModal key={editing?.id || "new"} product={editing} onClose={() => setShowForm(false)} onSaved={onSaved} />}</AnimatePresence><AnimatePresence>{toast && <motion.div className="toast" initial={{ opacity: 0, y: 24, x: 20 }} animate={{ opacity: 1, y: 0, x: 0 }} exit={{ opacity: 0, y: 20, x: 20 }} transition={{ type: "spring", damping: 18, stiffness: 320 }}>{toast}</motion.div>}</AnimatePresence></main></div>;
 }
 
 type OverviewData = {
@@ -982,6 +982,7 @@ const ORDER_STATUSES = ["pending", "confirmed", "shipped", "delivered", "cancell
 
 const NOTIF_POLL_MS = 15000;
 let notifAudioCtx: AudioContext | null = null;
+let lastOrderChimeAt = 0;
 
 function getNotifAudioContext(): AudioContext | null {
   if (typeof window === "undefined") return null;
@@ -991,21 +992,20 @@ function getNotifAudioContext(): AudioContext | null {
   return notifAudioCtx;
 }
 
-// Shopify-style two-note "cha-ching" chime, synthesized with the Web Audio API (no asset needed).
-function playNewOrderChime() {
+// Plays a short chime made of bell-like sine partials (fundamental + two overtones).
+function playBellNotes(notes: Array<{ freq: number; at: number; peak: number }>) {
   const ctx = getNotifAudioContext();
   if (!ctx) return;
   if (ctx.state === "suspended") void ctx.resume().catch(() => {});
   const start = ctx.currentTime + 0.03;
-  const chord = [{ freq: 1318.51, at: 0 }, { freq: 1760, at: 0.1 }];
-  chord.forEach(({ freq, at }) => {
-    [{ mult: 1, peak: 0.3 }, { mult: 2, peak: 0.09 }, { mult: 3, peak: 0.04 }].forEach(({ mult, peak }) => {
+  notes.forEach(({ freq, at, peak }) => {
+    [{ mult: 1, gain: peak }, { mult: 2, gain: peak * 0.3 }, { mult: 3, gain: peak * 0.13 }].forEach(({ mult, gain: level }) => {
       const osc = ctx.createOscillator();
       const gain = ctx.createGain();
       osc.type = "sine";
       osc.frequency.value = freq * mult;
       gain.gain.setValueAtTime(0.0001, start + at);
-      gain.gain.exponentialRampToValueAtTime(peak, start + at + 0.012);
+      gain.gain.exponentialRampToValueAtTime(level, start + at + 0.012);
       gain.gain.exponentialRampToValueAtTime(0.0001, start + at + 0.6);
       osc.connect(gain);
       gain.connect(ctx.destination);
@@ -1013,6 +1013,90 @@ function playNewOrderChime() {
       osc.stop(start + at + 0.65);
     });
   });
+}
+
+// Shopify-style two-note "cha-ching" — used for new order alerts (admins only).
+// Throttled so a push notification plus the dashboard poll never double-rings.
+function playNewOrderChime() {
+  const now = Date.now();
+  if (now - lastOrderChimeAt < 2500) return;
+  lastOrderChimeAt = now;
+  playBellNotes([{ freq: 1318.51, at: 0, peak: 0.3 }, { freq: 1760, at: 0.1, peak: 0.3 }]);
+}
+
+// Bright three-note jingle — used for customer offer alerts (distinct from the order sound).
+function playOfferChime() {
+  playBellNotes([{ freq: 783.99, at: 0, peak: 0.24 }, { freq: 987.77, at: 0.11, peak: 0.24 }, { freq: 1174.66, at: 0.22, peak: 0.26 }]);
+}
+
+function urlBase64ToUint8Array(base64String: string) {
+  const padding = "=".repeat((4 - (base64String.length % 4)) % 4);
+  const base64 = (base64String + padding).replace(/-/g, "+").replace(/_/g, "/");
+  const raw = window.atob(base64);
+  const output = new Uint8Array(raw.length);
+  for (let i = 0; i < raw.length; i += 1) output[i] = raw.charCodeAt(i);
+  return output;
+}
+
+type PushResult = "granted" | "denied" | "unsupported" | "error";
+
+// Asks for notification permission, creates a push subscription and saves it for the
+// signed-in user so the server can send order/offer notifications to this device.
+async function subscribeToPush(): Promise<PushResult> {
+  if (typeof window === "undefined" || !("serviceWorker" in navigator) || !("PushManager" in window) || !("Notification" in window)) return "unsupported";
+  try {
+    const permission = Notification.permission === "granted" ? "granted" : await Notification.requestPermission();
+    if (permission !== "granted") return "denied";
+    const registration = await navigator.serviceWorker.ready;
+    const keyResponse = await fetch("/api/push/public-key");
+    if (!keyResponse.ok) return "error";
+    const { publicKey } = await keyResponse.json() as { publicKey?: string };
+    if (!publicKey) return "error";
+    let subscription = await registration.pushManager.getSubscription();
+    if (!subscription) subscription = await registration.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: urlBase64ToUint8Array(publicKey) });
+    const saved = await fetch("/api/push/subscribe", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ subscription: subscription.toJSON() }) });
+    return saved.ok ? "granted" : "error";
+  } catch {
+    return "error";
+  }
+}
+
+// Removes this device's subscription (used when a customer turns offer alerts off).
+async function unsubscribeFromPush() {
+  if (typeof window === "undefined" || !("serviceWorker" in navigator) || !("PushManager" in window)) return;
+  try {
+    const registration = await navigator.serviceWorker.ready;
+    const subscription = await registration.pushManager.getSubscription();
+    if (!subscription) return;
+    await fetch("/api/push/subscribe", { method: "DELETE", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ endpoint: subscription.endpoint }) }).catch(() => undefined);
+    await subscription.unsubscribe().catch(() => undefined);
+  } catch { /* nothing to clean up */ }
+}
+
+function pushNotificationsSupported() {
+  return typeof window !== "undefined" && "serviceWorker" in navigator && "PushManager" in window && "Notification" in window;
+}
+
+// Prompts an admin to allow notifications so the installed app can ring on new orders.
+function PushEnableBanner({ label, copy }: { label: string; copy: string }) {
+  const [status, setStatus] = useState<"checking" | "hidden" | "prompt" | "denied" | "busy">("checking");
+  useEffect(() => {
+    if (!pushNotificationsSupported()) { setStatus("hidden"); return; }
+    setStatus(Notification.permission === "granted" ? "hidden" : Notification.permission === "denied" ? "denied" : "prompt");
+  }, []);
+  if (status === "checking" || status === "hidden") return null;
+  const enable = async () => {
+    setStatus("busy");
+    const result = await subscribeToPush();
+    setStatus(result === "granted" ? "hidden" : result === "denied" ? "denied" : "prompt");
+  };
+  return <div className="push-banner">
+    <span className="push-banner-icon"><Icon name="bell" size={18} /></span>
+    <div className="push-banner-copy"><b>{label}</b><span>{copy}</span></div>
+    {status === "denied"
+      ? <span className="push-banner-note">Blocked in your browser settings</span>
+      : <button type="button" className="push-banner-btn" onClick={enable} disabled={status === "busy"}>{status === "busy" ? "Enabling…" : "Enable"}</button>}
+  </div>;
 }
 
 function AdminNotificationBell() {
@@ -1477,6 +1561,20 @@ function SettingsPage({ go, theme, setTheme, user, onUserUpdate }: { go: (path: 
     // optimistic update — instant visual feedback
     onUserUpdate({ ...user, offerNotifications: nextVal });
     setUpdating(true);
+    // Turning offer alerts on also asks for notification permission and subscribes
+    // this device so the server can ring it when a new offer goes live.
+    let pushResult: PushResult = "granted";
+    if (nextVal) {
+      pushResult = await subscribeToPush();
+    } else {
+      await unsubscribeFromPush();
+    }
+    if (nextVal && pushResult !== "granted") {
+      // Could not enable device notifications — revert the toggle.
+      onUserUpdate({ ...user, offerNotifications: previous });
+      setUpdating(false);
+      return;
+    }
     try {
       const response = await fetch("/api/auth/me", {
         method: "PATCH",
@@ -1545,7 +1643,7 @@ function SettingsPage({ go, theme, setTheme, user, onUserUpdate }: { go: (path: 
         <div className="setting-icon"><Icon name="email" size={18} /></div>
         <div className="setting-copy">
           <b>{lang === "ar" ? "تنبيهات العروض" : lang === "tr" ? "Kampanya bildirimleri" : "Offer alerts"}</b>
-          <span>{lang === "ar" ? "سيتم إرسال إشعار إلى بريدك الإلكتروني عندما نطلق عرضًا جديدًا." : lang === "tr" ? "Yeni bir kampanya yayınlandığında e-posta ile bilgilendirilirsiniz." : "Get notified when new offers are published."}</span>
+          <span>{lang === "ar" ? "سنرسل لك إشعارًا بالبريد الإلكتروني وعلى هاتفك عند إطلاق عرض جديد." : lang === "tr" ? "Yeni bir kampanya yayınlandığında e-posta ve telefonda bildirim alırsınız." : "Get an email and a phone notification when new offers are published."}</span>
         </div>
         <button
           type="button"
@@ -1674,6 +1772,18 @@ export default function AppShell({ initialPath = "/" }: { initialPath?: string }
     fetch("/api/auth/me").then((response) => response.json()).then((data) => setUser(data.user || null)).catch(() => undefined);
     fetch("/api/catalog").then((response) => response.ok ? response.json() : null).then((data) => { if (!data?.products?.length) return; const next = data.products.map((item: Record<string, unknown>) => { const category = data.categories?.find((cat: Record<string, unknown>) => cat.id === item.categoryId); const image = String(item.mainImage || item.image600g || item.image300g || item.image || ""); const pType = String(item.productType || "cheese") as "cheese" | "sandwich"; return { id: String(item.id), slug: String(item.nameEn).trim().toLowerCase().replace(/[^a-z0-9]+/g, "-"), name: String(item.nameEn), nameAr: String(item.nameAr), nameTr: String(item.nameTr), descriptionAr: String(item.descriptionAr), descriptionTr: String(item.descriptionTr), productType: pType, price300: Number(item.price300g), price600: Number(item.price600g), priceSingle: item.priceSingle ? Number(item.priceSingle) : undefined, image, images: Array.isArray(item.images) ? item.images as string[] : [], images300g: Array.isArray(item.images300g) ? item.images300g as string[] : [String(item.image300g || image)], images600g: Array.isArray(item.images600g) ? item.images600g as string[] : [String(item.image600g || image)], description: String(item.descriptionEn), category: String(category?.nameEn || "Special"), tags: Array.isArray(item.tags) ? item.tags as string[] : [], flavors: Array.isArray(item.flavors) ? item.flavors as string[] : ["cool", "spicy", "veryhot"], featured: Boolean(item.featured), stockStatus: String(item.stockStatus) } as Product; }); setCatalog(next); }).catch(() => undefined);
     return () => window.removeEventListener("popstate", onPop);
+  }, []);
+  // Play the in-app sound that matches a push notification (order vs offer) while the app is open.
+  useEffect(() => {
+    if (!("serviceWorker" in navigator)) return;
+    const onMessage = (event: MessageEvent) => {
+      const data = event.data as { type?: string; kind?: string } | null;
+      if (!data || data.type !== "gebna-push") return;
+      if (data.kind === "offer") playOfferChime();
+      else playNewOrderChime();
+    };
+    navigator.serviceWorker.addEventListener("message", onMessage);
+    return () => navigator.serviceWorker.removeEventListener("message", onMessage);
   }, []);
   // Re-read the UI editor setting + text overrides on every navigation so the
   // floating button reflects changes made in the admin dashboard in this session.
