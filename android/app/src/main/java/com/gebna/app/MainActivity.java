@@ -1,13 +1,18 @@
 package com.gebna.app;
 
+import android.Manifest;
 import android.annotation.SuppressLint;
+import android.content.pm.PackageManager;
+import android.os.Build;
 import android.os.Bundle;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
 import androidx.appcompat.app.AppCompatActivity;
+import androidx.core.content.ContextCompat;
 
 public class MainActivity extends AppCompatActivity {
+    private static final int NOTIFICATION_PERMISSION_CODE = 101;
     private WebView webView;
 
     @SuppressLint("SetJavaScriptEnabled")
@@ -43,8 +48,19 @@ public class MainActivity extends AppCompatActivity {
         String userAgent = webView.getSettings().getUserAgentString();
         webView.getSettings().setUserAgentString(userAgent + " GebnaA-Android/1.0");
 
+        // Ask for notification access right away so order/offer alerts can reach the device.
+        requestNotificationPermission();
+
         // Load your website
         webView.loadUrl("https://gebna-a.app/");
+    }
+
+    // Shows the system notification prompt the moment the app opens (Android 13+ only;
+    // on older versions the permission is granted at install time).
+    private void requestNotificationPermission() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) return;
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED) return;
+        requestPermissions(new String[]{Manifest.permission.POST_NOTIFICATIONS}, NOTIFICATION_PERMISSION_CODE);
     }
 
     @Override
