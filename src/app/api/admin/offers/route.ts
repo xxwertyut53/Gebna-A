@@ -89,8 +89,26 @@ export async function PATCH(request: Request) {
   if ("endsAt" in (body || {})) { const v = body?.endsAt; updates.endsAt = typeof v === "string" && v ? new Date(v) : null; }
   if ("startsAt" in (body || {})) { const v = body?.startsAt; updates.startsAt = typeof v === "string" && v ? new Date(v) : null; }
   for (const k of Object.keys(updates)) if (updates[k] === undefined) delete updates[k];
+  const [existing] = await db.select().from(offers).where(eq(offers.id, id)).limit(1);
+  if (!existing) return Response.json({ error: "Offer not found." }, { status: 404 });
   const [offer] = await db.update(offers).set(updates).where(eq(offers.id, id)).returning();
   if (!offer) return Response.json({ error: "Offer not found." }, { status: 404 });
+  // An offer that just switched from off to on should notify customers, exactly like a new offer.
+  if (offer.active && !existing.active) {
+    sendNewOfferNotification({
+      titleEn: offer.titleEn,
+      titleTr: offer.titleTr,
+      titleAr: offer.titleAr,
+      descriptionEn: offer.descriptionEn,
+      descriptionTr: offer.descriptionTr,
+      descriptionAr: offer.descriptionAr,
+    }).catch((err) => {
+      console.error("[Gebna-A] Failed to broadcast offer emails:", err);
+    });
+    sendOfferPushToSubscribers({ titleEn: offer.titleEn, titleAr: offer.titleAr, descriptionEn: offer.descriptionEn }).catch((err) => {
+      console.error("[Gebna-A] Failed to broadcast offer push:", err);
+    });
+  }
   return Response.json({ offer });
 }
 
