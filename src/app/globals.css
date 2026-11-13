@@ -603,6 +603,7 @@ img { display: block; max-width: 100%; }
 .notif-item-copy span { color: #8d948a; font-size: 10px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .notif-item-time { flex: none; color: #a8aea4; font-size: 9px; font-weight: 700; }
 .admin-push-slot { margin: 0 auto 18px; max-width: 1380px; padding: 0 39px; }
+.store-push-slot { max-width: 1180px; margin: 18px auto 0; padding: 0 22px; }
 .push-banner { display: flex; align-items: center; gap: 13px; padding: 13px 15px; border: 1px solid #cfe6cc; border-radius: 13px; background: #f3faf1; }
 .push-banner-icon { width: 36px; height: 36px; flex: none; display: grid; place-items: center; color: var(--green); border-radius: 10px; background: #e5f3e3; }
 .push-banner-copy { flex: 1; min-width: 0; display: flex; flex-direction: column; }
@@ -802,6 +803,7 @@ img { display: block; max-width: 100%; }
   .admin-top-actions .icon-button { display: none; }
   .notif-pop { width: min(310px, calc(100vw - 76px)); }
   .admin-push-slot { padding: 0 16px; }
+  .store-push-slot { padding: 0 16px; }
   .push-banner { flex-wrap: wrap; }
   .push-banner-copy { flex-basis: calc(100% - 49px); }
   .push-banner-btn, .push-banner-note { margin-left: 49px; }

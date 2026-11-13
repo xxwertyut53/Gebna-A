@@ -572,7 +572,7 @@ function isProductNew(p: Product): boolean {
   return diffDays <= 30;
 }
 
-function HomePage({ go, addToCart, cartCount, catalog }: { go: (path: string) => void; addToCart: (product: Product, size?: "300g" | "600g", flavor?: string) => void; cartCount: number; catalog: Product[] }) {
+function HomePage({ go, addToCart, cartCount, catalog, onUserUpdate }: { go: (path: string) => void; addToCart: (product: Product, size?: "300g" | "600g", flavor?: string) => void; cartCount: number; catalog: Product[]; onUserUpdate: (u: User | null) => void }) {
   const { t, lang } = useI18n();
   const { user } = useSession();
   const [category, setCategory] = useState("All");
@@ -596,6 +596,7 @@ function HomePage({ go, addToCart, cartCount, catalog }: { go: (path: string) =>
         <motion.div className="hero-mark" style={{ y: markY }}><motion.img src={LOGO} alt="" animate={{ rotate: [0, 4, -4, 0] }} transition={{ duration: 8, repeat: Infinity, ease: "easeInOut" }} /></motion.div>
       </section>
       <OffersBanner />
+      {user && user.role === "customer" && <div className="store-push-slot"><CustomerPushBanner user={user} onUserUpdate={onUserUpdate} /></div>}
       <section className="intro-strip"><div><span className="eyebrow">{lang === "ar" ? "مجموعة Gebna-A" : "THE Gebna-A COLLECTION"}</span><h2>{t("craftedForTable")}</h2></div><p>{lang === "ar" ? "نكهات مصرية فريدة مصنوعة يدوياً على دفعات صغيرة. من الأصناف الكلاسيكية إلى الفلفل والأعشاب الجريئة، كل لقمة تحكي قصة." : "Unique, hand-crafted Egyptian flavors made in small batches. From familiar classics to bold pepper and herb varieties, every bite tells a story."}</p></section>
       
       {/* Dynamic "New Products" bar/section: Only visible if a product was added within last 30 days! */}
@@ -1093,6 +1094,35 @@ function PushEnableBanner({ label, copy }: { label: string; copy: string }) {
   return <div className="push-banner">
     <span className="push-banner-icon"><Icon name="bell" size={18} /></span>
     <div className="push-banner-copy"><b>{label}</b><span>{copy}</span></div>
+    {status === "denied"
+      ? <span className="push-banner-note">Blocked in your browser settings</span>
+      : <button type="button" className="push-banner-btn" onClick={enable} disabled={status === "busy"}>{status === "busy" ? "Enabling…" : "Enable"}</button>}
+  </div>;
+}
+
+// Offers signed-in customers the same one-tap notification setup on the storefront, so an
+// installed app can ring them when a new offer goes live (mirrors the admin banner).
+function CustomerPushBanner({ user, onUserUpdate }: { user: User; onUserUpdate: (u: User | null) => void }) {
+  const [status, setStatus] = useState<"checking" | "hidden" | "prompt" | "denied" | "busy">("checking");
+  useEffect(() => {
+    if (!pushNotificationsSupported() || user.offerNotifications) { setStatus("hidden"); return; }
+    setStatus(Notification.permission === "granted" ? "hidden" : Notification.permission === "denied" ? "denied" : "prompt");
+  }, [user.offerNotifications]);
+  if (status === "checking" || status === "hidden") return null;
+  const enable = async () => {
+    setStatus("busy");
+    const result = await subscribeToPush();
+    if (result !== "granted") { setStatus(result === "denied" ? "denied" : "prompt"); return; }
+    // Record the opt-in (the server only pushes offers to customers with this flag on).
+    try {
+      const response = await fetch("/api/auth/me", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ offerNotifications: true }) });
+      if (response.ok) { const data = await response.json(); onUserUpdate(data.user); }
+    } catch { /* the device subscription still works even if the profile flag did not save */ }
+    setStatus("hidden");
+  };
+  return <div className="push-banner customer-push-banner">
+    <span className="push-banner-icon"><Icon name="bell" size={18} /></span>
+    <div className="push-banner-copy"><b>Get offer notifications</b><span>Allow notifications and we&apos;ll alert you with a sound whenever a new offer goes live.</span></div>
     {status === "denied"
       ? <span className="push-banner-note">Blocked in your browser settings</span>
       : <button type="button" className="push-banner-btn" onClick={enable} disabled={status === "busy"}>{status === "busy" ? "Enabling…" : "Enable"}</button>}
@@ -1824,7 +1854,7 @@ export default function AppShell({ initialPath = "/" }: { initialPath?: string }
   const pathKey = path.split("#")[0];
   let content: React.ReactNode;
   if (path === "/" || path === "") content = <SplashPage go={go} />;
-  else if (path === "/home" || path === "/home#products") content = <HomePage go={go} addToCart={addToCart} cartCount={cartCount} catalog={catalog} />;
+  else if (path === "/home" || path === "/home#products") content = <HomePage go={go} addToCart={addToCart} cartCount={cartCount} catalog={catalog} onUserUpdate={setUser} />;
   else if (path === "/cart") content = <CartPage cart={cart} go={go} updateQuantity={updateQuantity} removeItem={removeItem} updateFlavor={updateFlavor} />;
   else if (path === "/checkout") content = <CheckoutPage cart={cart} go={go} clearCart={() => setCart([])} user={user} />;
   else if (path === "/orders") content = <OrdersPage go={go} />;
@@ -1836,6 +1866,6 @@ export default function AppShell({ initialPath = "/" }: { initialPath?: string }
   else if (path === "/download") content = <DownloadPage go={go} />;
   else if (path === "/admin") content = <AdminPage go={go} user={user} catalog={catalog} />;
   else if (path === "/ProductDetail" || path.startsWith("/product/")) content = <ProductDetailPage product={currentProduct} go={go} addToCart={addToCart} cartCount={cartCount} user={user} />;
-  else content = <HomePage go={go} addToCart={addToCart} cartCount={cartCount} catalog={catalog} />;
+  else content = <HomePage go={go} addToCart={addToCart} cartCount={cartCount} catalog={catalog} onUserUpdate={setUser} />;
   return <ThemeContext.Provider value={{ theme, setTheme: setThemeVal }}><SessionContext.Provider value={{ user }}><LanguageContext.Provider value={{ lang, setLang: setLanguage, t: (key) => copy[lang][key] || copy.en[key] || key }}><div ref={appRootRef} className={`app-root lang-${lang} theme-${theme}${editMode ? " ui-edit-mode" : ""}`} dir={lang === "ar" ? "rtl" : "ltr"}><motion.div className="scroll-progress" style={{ scaleX: scrollYProgress }} /><AnimatePresence mode="wait"><motion.div key={pathKey} initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} transition={{ duration: .22, ease: [0.22, 1, 0.36, 1] }}>{content}</motion.div></AnimatePresence>{isAdminUser && uiEditorEnabled && <div data-ui-editor className="ui-editor-dock">{editMode ? <div className="ui-editor-bar"><span className={`ui-editor-dot${editor.hasChanges ? " dirty" : ""}`} /><span className="ui-editor-bar-text">{editor.hasChanges ? "Unsaved changes" : "Edit mode · click any text to edit"}</span><button className="ui-editor-icon-btn" onClick={editor.undo} disabled={!editor.canUndo} title="Undo" aria-label="Undo">↶</button><button className="ui-editor-icon-btn" onClick={editor.redo} disabled={!editor.canRedo} title="Redo" aria-label="Redo">↷</button><button className="ui-editor-save" onClick={editor.save} disabled={!editor.hasChanges}>Save</button><button className="ui-editor-done" onClick={() => setEditMode(false)}>Done</button></div> : <button className="ui-editor-fab" onClick={() => setEditMode(true)} title="Edit website UI"><Icon name="edit" size={18} /><span>Edit UI</span></button>}</div>}<InstallPrompt /></div></LanguageContext.Provider></SessionContext.Provider></ThemeContext.Provider>;
 }
