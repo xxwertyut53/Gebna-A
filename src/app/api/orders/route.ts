@@ -39,17 +39,24 @@ export async function POST(request: Request) {
   const items = body?.items || [];
   if (!body?.customerName?.trim() || !body.customerPhone?.trim() || !body.deliveryAddress?.trim() || !body.deliveryCity?.trim() || !items.length) return Response.json({ error: "Customer information, delivery details, and at least one item are required." }, { status: 400 });
   if (items.some((item) => !validFlavors.has(item.flavorChoice) || !["300g", "600g"].includes(item.size) || item.quantity < 1)) return Response.json({ error: "Choose a valid flavor and size for every item." }, { status: 400 });
+  const slugify = (value: string) => value.trim().toLowerCase().replace(/[^a-z0-9]+/g, "-");
   const ids = [...new Set(items.map((item) => item.productId))];
-  // A cart saved during an offline session can hold placeholder ids (e.g. "classic"), which
-  // Postgres rejects as UUIDs and turns into an opaque 500. Answer the customer clearly instead.
-  if (ids.some((id) => !UUID_PATTERN.test(id))) return Response.json({ error: "Your cart is out of date. Please refresh the shop page and add the items again.", code: "CART_STALE" }, { status: 400 });
-  const dbProducts = await db.select().from(products).where(inArray(products.id, ids));
-  if (dbProducts.length !== ids.length) return Response.json({ error: "One or more products are no longer available." }, { status: 400 });
-  const productMap = new Map(dbProducts.map((product) => [product.id, product]));
+  const uuidIds = ids.filter((id) => UUID_PATTERN.test(id));
+  const slugIds = ids.filter((id) => !UUID_PATTERN.test(id));
+  // A cart saved while the shop catalog was unreachable can hold placeholder ids (e.g. "classic")
+  // instead of database UUIDs. Postgres rejects those as UUIDs and would fail the whole order, so
+  // match them to the real product by name before giving up. Prices always come from the database.
+  const productMap = new Map<string, { id: string; nameEn: string; price300g: unknown; price600g: unknown }>();
+  if (uuidIds.length) for (const product of await db.select().from(products).where(inArray(products.id, uuidIds))) productMap.set(product.id, product);
+  if (slugIds.length) {
+    const bySlug = new Map((await db.select().from(products)).map((product) => [slugify(product.nameEn), product]));
+    for (const slug of slugIds) { const product = bySlug.get(slug); if (product) productMap.set(slug, product); }
+  }
+  if (ids.some((id) => !productMap.has(id))) return Response.json({ error: "One or more products are no longer available." }, { status: 400 });
   const prepared = items.map((item) => {
     const product = productMap.get(item.productId)!;
     const unitPrice = Number(item.size === "300g" ? product.price300g : product.price600g);
-    return { ...item, productName: product.nameEn, unitPrice };
+    return { ...item, productId: product.id, productName: product.nameEn, unitPrice };
   });
   const total = prepared.reduce((sum, item) => sum + item.unitPrice * item.quantity, 0);
   const orderCode = `GA-${Date.now().toString(36).toUpperCase().slice(-6)}`;

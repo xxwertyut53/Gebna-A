@@ -70,9 +70,15 @@ export async function POST(request: NextRequest) {
     }
 
     // A page opened while the catalog was unavailable can hold a placeholder id (e.g. "classic"),
-    // which Postgres rejects as a UUID and turns into an opaque 500. Answer clearly instead.
-    if (!UUID_PATTERN.test(String(productId))) {
-      return NextResponse.json({ error: "This product is out of date. Please refresh the shop page and try again." }, { status: 400 });
+    // which Postgres rejects as a UUID. Match it to the real product by name instead of failing.
+    let resolvedProductId = String(productId);
+    if (!UUID_PATTERN.test(resolvedProductId)) {
+      const slug = resolvedProductId.trim().toLowerCase().replace(/[^a-z0-9]+/g, "-");
+      const match = (await db.select().from(products)).find((product) => product.nameEn.trim().toLowerCase().replace(/[^a-z0-9]+/g, "-") === slug);
+      if (!match) {
+        return NextResponse.json({ error: "This product is no longer available. Please refresh the shop page and try again." }, { status: 400 });
+      }
+      resolvedProductId = match.id;
     }
 
     if (rating < 1 || rating > 5) {
@@ -82,7 +88,7 @@ export async function POST(request: NextRequest) {
     const photo = typeof imageUrl === "string" && imageUrl.startsWith("data:image") ? imageUrl : null;
 
     const newReview = await db.insert(reviews).values({
-      productId,
+      productId: resolvedProductId,
       userId: user.id,
       customerName: user.name,
       rating: String(rating),
