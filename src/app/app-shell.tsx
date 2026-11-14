@@ -726,8 +726,12 @@ function ProductDetailPage({ product, go, addToCart, cartCount, user }: { produc
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ rating: reviewForm.rating, comment: reviewForm.comment, productId: product.id, imageUrl: reviewPhoto || undefined }),
-    });
-    const data = await response.json();
+    }).catch(() => null);
+    if (!response) {
+      setReviewError(lang === "ar" ? "تعذّر الاتصال بالخادم — تحقق من الإنترنت وحاول مرة أخرى." : lang === "tr" ? "Sunucuya ulaşılamadı. Bağlantınızı kontrol edip tekrar deneyin." : "Could not reach the server. Check your connection and try again.");
+      return;
+    }
+    const data = await response.json().catch(() => ({}));
     if (!response.ok) {
       setReviewError(data.error || "Failed to submit review");
       return;

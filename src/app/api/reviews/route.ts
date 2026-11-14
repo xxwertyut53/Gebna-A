@@ -6,6 +6,8 @@ import { NextRequest, NextResponse } from "next/server";
 
 export const dynamic = "force-dynamic";
 
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
   const productId = searchParams.get("productId");
@@ -65,6 +67,12 @@ export async function POST(request: NextRequest) {
 
     if (!productId || !rating || !comment) {
       return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
+    }
+
+    // A page opened while the catalog was unavailable can hold a placeholder id (e.g. "classic"),
+    // which Postgres rejects as a UUID and turns into an opaque 500. Answer clearly instead.
+    if (!UUID_PATTERN.test(String(productId))) {
+      return NextResponse.json({ error: "This product is out of date. Please refresh the shop page and try again." }, { status: 400 });
     }
 
     if (rating < 1 || rating > 5) {
