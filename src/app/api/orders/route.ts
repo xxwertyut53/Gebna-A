@@ -7,6 +7,7 @@ import { sendOrderNotifications } from "@/lib/email";
 import { sendOrderPushToAdmins } from "@/lib/push";
 
 const validFlavors = new Set(["spicy", "cool", "veryhot", "none"]);
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 export async function GET(request: Request) {
   const user = await getCurrentUser();
@@ -39,6 +40,9 @@ export async function POST(request: Request) {
   if (!body?.customerName?.trim() || !body.customerPhone?.trim() || !body.deliveryAddress?.trim() || !body.deliveryCity?.trim() || !items.length) return Response.json({ error: "Customer information, delivery details, and at least one item are required." }, { status: 400 });
   if (items.some((item) => !validFlavors.has(item.flavorChoice) || !["300g", "600g"].includes(item.size) || item.quantity < 1)) return Response.json({ error: "Choose a valid flavor and size for every item." }, { status: 400 });
   const ids = [...new Set(items.map((item) => item.productId))];
+  // A cart saved during an offline session can hold placeholder ids (e.g. "classic"), which
+  // Postgres rejects as UUIDs and turns into an opaque 500. Answer the customer clearly instead.
+  if (ids.some((id) => !UUID_PATTERN.test(id))) return Response.json({ error: "Your cart is out of date. Please refresh the shop page and add the items again.", code: "CART_STALE" }, { status: 400 });
   const dbProducts = await db.select().from(products).where(inArray(products.id, ids));
   if (dbProducts.length !== ids.length) return Response.json({ error: "One or more products are no longer available." }, { status: 400 });
   const productMap = new Map(dbProducts.map((product) => [product.id, product]));
