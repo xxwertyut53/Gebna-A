@@ -154,6 +154,9 @@ async function ensureExtraColumns() {
   try {
     await db.execute(sql`ALTER TABLE reviews ADD COLUMN IF NOT EXISTS image_url text`);
     await db.execute(sql`ALTER TABLE reviews ADD COLUMN IF NOT EXISTS image_approved boolean NOT NULL DEFAULT false`);
+    // The flavors column was added to the products schema after the initial table was created.
+    // Without it every `select * from products` (catalog + admin) fails and the admin list looks empty.
+    await db.execute(sql`ALTER TABLE products ADD COLUMN IF NOT EXISTS flavors jsonb NOT NULL DEFAULT '["cool","spicy","veryhot"]'::jsonb`);
     await db.execute(sql`CREATE TABLE IF NOT EXISTS verification_codes (
       id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
       email text NOT NULL,
